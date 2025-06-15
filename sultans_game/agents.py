@@ -3,12 +3,20 @@ from langchain_openai import ChatOpenAI
 from typing import Dict, List, Any, Optional
 from .models import GameState, Character, SceneState, Card, CardType
 from .tools import GameToolsManager
+from .config import get_openai_config
 
 class SultansGameAgents:
     """苏丹的游戏智能体集合"""
     
-    def __init__(self, llm_model: str = "gpt-4o-mini"):
-        self.llm = ChatOpenAI(model=llm_model, temperature=0.7)
+    def __init__(self, llm_model: str = None):
+        config = get_openai_config()
+        model_name = llm_model or config["model"]  # 使用传入的模型或配置中的默认模型
+        self.llm = ChatOpenAI(
+            model=model_name,
+            temperature=0.7,
+            base_url=config["base_url"],
+            api_key=config["api_key"]
+        )
     
     def create_follower_agent(self, character: Character, card: Optional[Card] = None, tools_manager: Optional[GameToolsManager] = None) -> Agent:
         """创建随从智能体"""
@@ -169,7 +177,7 @@ class SultansGameAgents:
 class GameMaster:
     """游戏主控制器"""
     
-    def __init__(self, game_state: GameState, llm_model: str = "gpt-4o-mini"):
+    def __init__(self, game_state: GameState, llm_model: str = None):
         self.game_state = game_state
         self.agents_creator = SultansGameAgents(llm_model)
         self.tools_manager = GameToolsManager(game_state)

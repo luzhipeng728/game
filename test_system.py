@@ -1,15 +1,48 @@
 #!/usr/bin/env python3
 """
 苏丹的游戏 - 系统测试脚本
-测试各个组件的基本功能
+测试多智能体交互系统的各个组件
 """
 
 import os
 import sys
-from dotenv import load_dotenv
+from datetime import datetime
+from typing import Dict, Any
 
-# 加载环境变量
-load_dotenv()
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+# 导入游戏模块
+from sultans_game.models import GameState, Character, Card, CardType, CardRank, SceneState
+from sultans_game.agents import GameMaster
+from sultans_game.cards import CardGenerator
+from sultans_game.tools import GameToolsManager
+from sultans_game.config import get_openai_config
+
+def print_separator(title: str):
+    """打印分隔符"""
+    print("\n" + "="*60)
+    print(f" {title} ")
+    print("="*60)
+
+def print_subsection(title: str):
+    """打印子章节标题"""
+    print(f"\n--- {title} ---")
+
+def test_config():
+    """测试配置"""
+    print_separator("配置测试")
+    
+    try:
+        config = get_openai_config()
+        print("✅ API配置加载成功")
+        print(f"   模型: {config['model']}")
+        print(f"   API Base: {config['base_url']}")
+        print(f"   API Key: {config['api_key'][:10]}...{config['api_key'][-4:]}")
+        return True
+    except Exception as e:
+        print(f"❌ API配置加载失败: {e}")
+        return False
 
 def test_imports():
     """测试模块导入"""
@@ -148,18 +181,6 @@ def test_tools():
         print(f"❌ 工具系统测试失败: {e}")
         return False
 
-def test_api_key():
-    """测试API密钥"""
-    print("\n🔍 测试API密钥...")
-    
-    api_key = os.getenv("OPENAI_API_KEY")
-    if api_key and len(api_key) > 10:
-        print("✅ API 密钥已设置")
-        return True
-    else:
-        print("⚠️ API 密钥未设置或无效，请检查 .env 文件")
-        return False
-
 def test_agents():
     """测试智能体创建"""
     print("\n🔍 测试智能体创建...")
@@ -259,7 +280,7 @@ def main():
         test_models,
         test_cards,
         test_tools,
-        test_api_key,
+        test_config,
         test_agents,
         test_game_master
     ]

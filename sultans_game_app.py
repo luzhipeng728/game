@@ -18,9 +18,13 @@ try:
     from sultans_game.agents import GameMaster
     from sultans_game.cards import CardGenerator
     from sultans_game.tools import GameToolsManager
+    from sultans_game.config import get_openai_config  # 导入配置
 except ImportError as e:
     st.error(f"导入模块失败: {e}")
     st.stop()
+
+# 初始化API配置
+config = get_openai_config()
 
 # 初始化会话状态
 def initialize_session_state():
@@ -45,15 +49,6 @@ def initialize_session_state():
     
     if 'current_card' not in st.session_state:
         st.session_state.current_card = None
-
-def check_api_key():
-    """检查API密钥"""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        st.error("请设置 OPENAI_API_KEY 环境变量")
-        st.info("在侧边栏中输入你的 OpenAI API 密钥")
-        return False
-    return True
 
 def display_character_info(character_name: str):
     """显示角色信息"""
@@ -129,26 +124,20 @@ def display_card_info(card: Card):
         st.write(f"**时限:** {card.time_limit_days} 天")
 
 def main():
-    # 检查API密钥
-    if not check_api_key():
-        return
-    
     # 初始化会话状态
     initialize_session_state()
     
     # 主标题
     st.title("🏰 苏丹的游戏 - 多智能体卡牌系统")
     st.markdown("*一个基于CrewAI的多智能体对话系统，模拟《苏丹的游戏》中的妓院场景*")
+    st.info(f"🤖 使用模型: {config['model']} | API Base: {config['base_url']}")
     
     # 侧边栏
     with st.sidebar:
         st.header("⚙️ 游戏设置")
         
-        # API密钥输入
-        api_key_input = st.text_input("OpenAI API 密钥", type="password", 
-                                     help="输入你的OpenAI API密钥")
-        if api_key_input:
-            os.environ["OPENAI_API_KEY"] = api_key_input
+        st.success("✅ API已配置完成")
+        st.info(f"当前模型: {config['model']}")
         
         st.divider()
         
@@ -219,10 +208,6 @@ def main():
         
         # 开始对话按钮
         if st.button("🎭 开始场景对话", disabled=st.session_state.current_card is None):
-            if not os.getenv("OPENAI_API_KEY"):
-                st.error("请先设置 OpenAI API 密钥")
-                return
-            
             with st.spinner("智能体们正在交流中..."):
                 try:
                     # 执行对话

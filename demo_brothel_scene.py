@@ -2,217 +2,276 @@
 
 """
 苏丹的游戏 - 妓院场景演示
-展示多智能体卡牌任务系统的完整交互流程
+展示多智能体交互系统的完整功能
 """
 
 import os
-from dotenv import load_dotenv
+import sys
+from datetime import datetime
+from typing import Dict, Any
 
-# 加载环境变量
-load_dotenv()
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-def create_demo_characters():
-    """创建演示角色"""
-    from sultans_game.models import Character
+# 导入游戏模块
+from sultans_game.models import GameState, Character, Card, CardType, CardRank, SceneState
+from sultans_game.agents import GameMaster
+from sultans_game.cards import CardGenerator
+from sultans_game.config import get_openai_config
+
+def print_header(title: str):
+    """打印标题"""
+    print("\n" + "="*60)
+    print(f"🏰 {title}")
+    print("="*60)
+
+def print_section(title: str):
+    """打印章节标题"""
+    print(f"\n--- {title} ---")
+
+def setup_demo_characters():
+    """设置演示角色"""
+    print_section("创建角色")
     
-    # 随从角色
+    # 创建随从
     follower = Character(
-        name="阿里",
+        name="阿里·伊本·萨利姆",
         role="忠诚的随从",
-        personality="谨慎而机智，擅长察言观色，对主人忠诚不二",
+        personality="机智谨慎，善于观察，对主人绝对忠诚",
         attributes={
             "魅力": 65,
-            "智慧": 75,
+            "智慧": 80,
             "体魄": 70,
-            "战斗": 80,
-            "社交": 68,
-            "隐匿": 85,
-            "防御": 60,
-            "声望": 45
+            "战斗": 75,
+            "社交": 70,
+            "隐匿": 85
         }
     )
+    print(f"✅ 随从创建成功: {follower.name}")
     
-    # 妓女角色
+    # 创建妓女
     courtesan = Character(
-        name="雅斯敏",
-        role="花魁",
-        personality="魅惑动人，聪慧机敏，善于用美色和智慧获得想要的一切",
+        name="雅丝敏·月光之女",
+        role="魅惑的妓女",
+        personality="聪慧美丽，善于读心，在温柔中藏着锋芒",
         attributes={
             "魅力": 95,
-            "智慧": 70,
-            "体魄": 55,
-            "战斗": 25,
-            "社交": 88,
-            "隐匿": 65,
-            "防御": 40,
-            "声望": 75
-        }
-    )
-    
-    # 老鸨角色
-    madam = Character(
-        name="法蒂玛",
-        role="老鸨",
-        personality="精明能干，阅历丰富，既慈祥又严厉，保护手下姑娘们",
-        attributes={
-            "魅力": 70,
-            "智慧": 90,
+            "智慧": 85,
             "体魄": 60,
-            "战斗": 45,
-            "社交": 95,
-            "隐匿": 70,
-            "防御": 75,
-            "声望": 85
+            "战斗": 40,
+            "社交": 90,
+            "隐匿": 70
         }
     )
+    print(f"✅ 妓女创建成功: {courtesan.name}")
+    
+    # 创建老鸨
+    madam = Character(
+        name="哈蒂嘉·金蔷薇夫人",
+        role="精明的老鸨",
+        personality="经验丰富，眼光毒辣，既慈祥又严厉，保护着她的姑娘们",
+        attributes={
+            "魅力": 75,
+            "智慧": 90,
+            "体魄": 65,
+            "战斗": 60,
+            "社交": 95,
+            "隐匿": 80
+        }
+    )
+    madam.attributes["声望"] = 85  # 特殊属性
+    print(f"✅ 老鸨创建成功: {madam.name}")
     
     return follower, courtesan, madam
 
-def create_demo_card():
-    """创建演示卡牌"""
-    from sultans_game.models import Card, CardType, CardRank
-    
-    return Card(
-        card_type=CardType.LUST,
-        rank=CardRank.BRONZE,
-        title="美人心计",
-        description="通过魅力和金钱在妓院中获得一位花魁的好感，并从她那里获得关于贵族客人的秘密情报",
-        target_character="雅斯敏",
-        required_actions=["展现魅力", "慷慨消费", "巧妙询问", "获得信任"],
-        rewards={"情报": 20, "魅力": 2, "声望": 5, "经验": 25},
-        penalty={"金币": -100, "被识破风险": "中等"},
-        time_limit_days=3
-    )
-
-def setup_demo_scenario():
+def setup_demo_scene():
     """设置演示场景"""
-    from sultans_game.models import GameState, SceneState
-    from sultans_game.agents import GameMaster
+    print_section("设置场景")
     
-    # 创建场景
     scene = SceneState(
-        location="月牙湾妓院",
-        atmosphere="烛光摇曳，香气弥漫，丝竹之声轻柔，暧昧而神秘",
-        time_of_day="深夜",
+        location="金蔷薇妓院 - 华丽的接待大厅",
+        atmosphere="奢华而神秘，弥漫着檀香和玫瑰花的香味，烛光摇曳",
+        time_of_day="深夜时分",
         characters_present=[],
         scene_values={
             "紧张度": 15,
-            "暧昧度": 45,
+            "暧昧度": 40,
             "危险度": 10,
-            "金钱消费": 0
+            "金钱消费": 0,
+            "老鸨关注度": 20,
+            "妓女兴趣度": 30
         }
     )
     
-    # 创建游戏状态
-    game_state = GameState(current_scene=scene)
+    print(f"📍 场景: {scene.location}")
+    print(f"🕰️ 时间: {scene.time_of_day}")
+    print(f"🎭 氛围: {scene.atmosphere}")
     
-    # 创建角色
-    follower, courtesan, madam = create_demo_characters()
-    game_state.characters[follower.name] = follower
-    game_state.characters[courtesan.name] = courtesan
-    game_state.characters[madam.name] = madam
-    
-    # 设置关系
-    follower.relationships[courtesan.name] = 50  # 初次相遇，中性
-    follower.relationships[madam.name] = 45      # 稍有戒备
-    courtesan.relationships[follower.name] = 55  # 略有好感
-    madam.relationships[follower.name] = 40      # 警惕的商人态度
-    
-    # 创建游戏主控制器
-    game_master = GameMaster(game_state)
-    
-    return game_master, follower, courtesan, madam
+    return scene
 
-def run_demo():
-    """运行演示"""
-    print("🏰 《苏丹的游戏》- 妓院场景演示")
-    print("=" * 60)
-    print()
+def create_demo_card():
+    """创建演示卡牌"""
+    print_section("生成任务卡牌")
     
-    # 检查API密钥
-    if not os.getenv("OPENAI_API_KEY"):
-        print("⚠️ 警告：未设置 OPENAI_API_KEY")
-        print("   演示将创建智能体但不会执行实际对话")
-        print("   请在 .env 文件中设置 API 密钥以体验完整功能")
-        print()
+    generator = CardGenerator()
+    card = generator.generate_card(CardType.LUST, CardRank.BRONZE)
+    
+    print(f"🎴 卡牌: {card.title}")
+    print(f"📝 类型: {card.card_type.value} - {card.rank.value}")
+    print(f"📄 描述: {card.description}")
+    
+    if card.required_actions:
+        print("📋 所需行动:")
+        for action in card.required_actions:
+            print(f"   - {action}")
+    
+    return card
+
+def display_character_stats(characters):
+    """显示角色状态"""
+    print_section("角色状态")
+    
+    for char in characters:
+        print(f"\n👤 {char.name} ({char.role})")
+        print(f"   性格: {char.personality}")
+        
+        # 显示属性
+        attrs = []
+        for attr, value in char.attributes.items():
+            attrs.append(f"{attr}:{value}")
+        print(f"   属性: {' | '.join(attrs)}")
+        
+        # 显示关系
+        if char.relationships:
+            relationships = []
+            for target, value in char.relationships.items():
+                relationships.append(f"{target}:{value}")
+            print(f"   关系: {' | '.join(relationships)}")
+
+def run_demo_interaction(game_master, card):
+    """运行演示交互"""
+    print_section("开始智能体交互")
+    
+    print("🎭 智能体们开始交流...")
+    print("📝 场景描述:")
+    print("""
+    夜幕深垂，金蔷薇妓院的华丽大厅里灯火辉煌。
+    随从阿里带着主人的秘密任务来到这里，他必须小心翼翼地接近目标，
+    完成卡牌任务而不暴露自己的真实意图。
+    
+    美丽的雅丝敏正在大厅中与其他客人交谈，
+    而经验丰富的哈蒂嘉夫人则在一旁观察着每一个进入她领域的人...
+    """)
     
     try:
-        # 设置演示场景
-        print("🎭 正在设置演示场景...")
-        game_master, follower, courtesan, madam = setup_demo_scenario()
+        # 执行智能体交互
+        result = game_master.run_brothel_interaction(
+            scenario_description="""
+            深夜的金蔷薇妓院，奢华而危险。随从必须在这个充满诱惑和陷阱的地方
+            完成一项纵欲类任务，而妓女和老鸨都有着自己的盘算...
+            """,
+            max_iterations=3
+        )
+        
+        if result["success"]:
+            print("\n🎉 智能体交互完成！")
+            
+            # 显示故事内容
+            if "story_content" in result:
+                print_section("故事内容")
+                print(result["story_content"])
+            
+            # 显示场景数值变化
+            if "scene_values" in result:
+                print_section("场景数值变化")
+                for key, value in result["scene_values"].items():
+                    print(f"   {key}: {value}")
+            
+            # 显示对话历史
+            if result["dialogue_history"]:
+                print_section("对话记录")
+                for i, dialogue in enumerate(result["dialogue_history"]):
+                    print(f"   {i+1}. {dialogue}")
+        
+        else:
+            print(f"❌ 交互失败: {result.get('error', '未知错误')}")
+            
+    except Exception as e:
+        print(f"❌ 执行交互时发生错误: {e}")
+
+def main():
+    """主演示函数"""
+    print_header("苏丹的游戏 - 妓院场景演示")
+    
+    # 检查配置
+    print_section("检查系统配置")
+    config = get_openai_config()
+    print("✅ API配置加载成功")
+    print(f"   模型: {config['model']}")
+    print(f"   API Base: {config['base_url']}")
+    
+    try:
+        # 设置角色
+        follower, courtesan, madam = setup_demo_characters()
+        
+        # 设置场景
+        scene = setup_demo_scene()
+        
+        # 创建游戏状态
+        game_state = GameState(current_scene=scene)
+        game_state.characters[follower.name] = follower
+        game_state.characters[courtesan.name] = courtesan
+        game_state.characters[madam.name] = madam
+        
+        # 创建卡牌
         card = create_demo_card()
+        
+        # 显示角色状态
+        display_character_stats([follower, courtesan, madam])
+        
+        # 创建游戏主控制器
+        print_section("初始化游戏系统")
+        game_master = GameMaster(game_state)
+        print("✅ 游戏主控制器创建成功")
         
         # 设置妓院场景
         game_master.setup_brothel_scenario(follower, card, courtesan, madam)
+        print("✅ 妓院场景设置完成")
         
-        print("✅ 场景设置完成")
-        print()
+        # 执行演示交互
+        print("🎭 准备开始智能体交互...")
+        print("   这可能需要几分钟时间，请耐心等待...")
         
-        # 显示场景信息
-        print("📍 场景信息:")
-        print(f"   地点: {game_master.game_state.current_scene.location}")
-        print(f"   氛围: {game_master.game_state.current_scene.atmosphere}")
-        print(f"   时间: {game_master.game_state.current_scene.time_of_day}")
-        print()
+        run_demo_interaction(game_master, card)
         
-        print("🎴 当前卡牌任务:")
-        print(f"   标题: {card.title}")
-        print(f"   描述: {card.description}")
-        print(f"   目标: {card.target_character}")
-        print(f"   奖励: {card.rewards}")
-        print()
+        # 显示最终游戏摘要
+        print_section("游戏摘要")
+        summary = game_master.get_game_summary()
         
-        print("👥 角色介绍:")
-        for name, char in game_master.game_state.characters.items():
-            print(f"   • {name} ({char.role})")
-            print(f"     性格: {char.personality}")
-            print(f"     魅力: {char.charm}, 智慧: {char.wisdom}, 社交: {char.social}")
-            print()
+        print("📊 最终状态:")
+        print(f"   场景: {summary['scene']['location']}")
+        print(f"   氛围: {summary['scene']['atmosphere']}")
+        print(f"   对话轮数: {summary['dialogue_count']}")
         
-        # 如果有API密钥，运行实际对话
-        if os.getenv("OPENAI_API_KEY"):
-            print("🎬 开始多智能体对话交互...")
-            print("=" * 60)
-            
-            # 运行妓院交互
-            result = game_master.run_brothel_interaction(
-                scenario_description="""
-                夜深人静，月牙湾妓院内华灯初上。随从阿里奉主人之命，带着秘密任务踏进了这座城中最著名的风月场所。
-                他必须巧妙地接近花魁雅斯敏，在不暴露真实意图的情况下获得关于贵族客人的珍贵情报。
-                
-                妓院内，老鸨法蒂玛正精明地观察着每一位客人，她的经验告诉她这位新来的客人并不简单。
-                而美艳的雅斯敏则用她那双如星辰般的眼眸打量着这位英俊的陌生人，心中琢磨着他的来意...
-                """,
-                max_iterations=3  # 限制轮次以避免过长的对话
-            )
-            
-            if result["success"]:
-                print("\n🎉 对话交互完成!")
-                print("\n📜 故事内容:")
-                print("-" * 40)
-                print(result["story_content"])
-                print("-" * 40)
-                
-                # 显示最终状态
-                print("\n📊 最终场景状态:")
-                for key, value in result["scene_values"].items():
-                    print(f"   {key}: {value}")
-                
-                print(f"\n💬 对话记录数: {len(result['dialogue_history'])}")
-                
-            else:
-                print(f"\n❌ 对话执行失败: {result.get('error', '未知错误')}")
+        print("\n🎯 角色关系变化:")
+        for char_name, char_data in summary['characters'].items():
+            if char_data['relationships']:
+                print(f"   {char_name}:")
+                for target, relationship in char_data['relationships'].items():
+                    print(f"     - 对 {target}: {relationship}")
         
-        else:
-            print("💡 演示场景已准备就绪!")
-            print("   设置 OPENAI_API_KEY 后重新运行以体验完整的 AI 对话")
-        
-        print("\n🎯 演示完成!")
+        print("\n🏆 演示完成！")
+        print("   如果想要体验完整的 AI 对话，请确保:")
+        print("   ✅ API配置正确")
+        print("   ✅ 网络连接正常")
+        print("   ✅ 模型服务可用")
         
     except Exception as e:
-        print(f"❌ 演示过程中发生错误: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ 演示执行失败: {e}")
+        print("📝 请检查:")
+        print("   - API配置是否正确")
+        print("   - 网络连接是否正常")
+        print("   - 所有依赖是否已安装")
 
 if __name__ == "__main__":
-    run_demo()
+    main()
