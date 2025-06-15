@@ -244,9 +244,9 @@ def scene_control_tool(action: str, parameter: str = "", value: str = "") -> str
     """控制场景变化和事件
     
     Args:
-        action: 行动类型（改变氛围、触发事件、转换场景）
-        parameter: 参数名称
-        value: 参数值
+        action: 行动类型（改变氛围、触发事件、转换场景、改变数值）
+        parameter: 参数名称（对于改变数值：紧张度、暧昧度、危险度、金钱消费）
+        value: 参数值（对于改变数值：数值变化量）
         
     Returns:
         场景控制结果的JSON字符串
@@ -268,6 +268,23 @@ def scene_control_tool(action: str, parameter: str = "", value: str = "") -> str
         old_atmosphere = scene.atmosphere
         scene.atmosphere = value
         result["changes"].append(f"氛围从'{old_atmosphere}'变为'{value}'")
+    
+    elif action == "改变数值":
+        # 处理场景数值变化
+        valid_types = ["紧张度", "暧昧度", "危险度", "金钱消费"]
+        if parameter in valid_types:
+            try:
+                change_amount = int(value)
+                current_value = scene.scene_values.get(parameter, 0)
+                new_value = max(0, min(100, current_value + change_amount))
+                scene.scene_values[parameter] = new_value
+                result["changes"].append(f"{parameter}从{current_value}变为{new_value}（变化{change_amount}）")
+            except ValueError:
+                result["success"] = False
+                result["changes"].append(f"无效的数值变化量: {value}")
+        else:
+            result["success"] = False
+            result["changes"].append(f"无效的场景数值类型: {parameter}")
     
     elif action == "触发事件":
         event = {

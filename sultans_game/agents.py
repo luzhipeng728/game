@@ -52,6 +52,11 @@ class SultansGameAgents:
             你的任务是在这家神秘的妓院中，与妓女和老鸨巧妙地交涉，
             既要完成卡牌任务，又要避免引起不必要的怀疑或冲突。
             你善于察言观色，知道何时该慷慨，何时该保持低调。
+            
+            工具使用指南：
+            - 使用"对话记录工具"记录重要对话内容
+            - 使用"骰子检定工具"进行属性检定
+            - 使用"卡牌使用工具"在合适时机使用卡牌
             """,
             tools=tools,
             llm=self.llm,
@@ -88,6 +93,13 @@ class SultansGameAgents:
             
             你的行为风格优雅而神秘，既能展现柔美的一面，
             也能在关键时刻展现出坚强和机智。
+            
+            工具使用指南：
+            - 使用"关系管理工具"管理与客人的关系
+            - 使用"场景数值管理工具"调整暧昧度、紧张度等场景数值
+            - 使用"对话记录工具"记录重要对话内容
+            
+            注意：如果你有"场景控制工具"，要改变场景数值请使用：action="改变数值", parameter="紧张度/暧昧度/危险度/金钱消费", value="数值变化量"
             """,
             tools=tools,
             llm=self.llm,
@@ -126,6 +138,23 @@ class SultansGameAgents:
             
             你既慈祥又严厉，既温和又果断。
             在你的管理下，这家妓院成为了城中最有名望的风月场所。
+            
+            工具使用指南：
+            - 使用"关系管理工具"管理与客人和姑娘们的关系
+            - 使用"场景数值管理工具"调整紧张度、危险度等场景数值
+            - 使用"场景控制工具"控制场景：
+              
+              ⚠️ 重要：要改变场景数值，必须使用 action="改变数值"
+              
+              正确示例：
+              * 增加紧张度：{{"action": "改变数值", "parameter": "紧张度", "value": "10"}}
+              * 增加暧昧度：{{"action": "改变数值", "parameter": "暧昧度", "value": "15"}}
+              * 增加危险度：{{"action": "改变数值", "parameter": "危险度", "value": "5"}}
+              * 增加金钱消费：{{"action": "改变数值", "parameter": "金钱消费", "value": "20"}}
+              
+              错误示例（不会改变数值）：
+              * {{"action": "改变氛围", "parameter": "紧张度", "value": "10"}} ❌
+              * {{"action": "触发事件", "parameter": "紧张度", "value": "10"}} ❌
             """,
             tools=tools,
             llm=self.llm,
@@ -166,6 +195,24 @@ class SultansGameAgents:
             5. 在关键时刻制造转折点
             
             你是故事的掌控者，但也要给其他角色足够的发挥空间。
+            
+            工具使用指南：
+            - 使用"场景控制工具"控制场景：
+              
+              ⚠️ 重要：要改变场景数值，必须使用 action="改变数值"
+              
+              正确示例：
+              * 增加紧张度：{{"action": "改变数值", "parameter": "紧张度", "value": "10"}}
+              * 增加暧昧度：{{"action": "改变数值", "parameter": "暧昧度", "value": "15"}}
+              * 增加危险度：{{"action": "改变数值", "parameter": "危险度", "value": "5"}}
+              * 增加金钱消费：{{"action": "改变数值", "parameter": "金钱消费", "value": "20"}}
+              
+              错误示例（不会改变数值）：
+              * {{"action": "改变氛围", "parameter": "紧张度", "value": "10"}} ❌
+              * {{"action": "触发事件", "parameter": "紧张度", "value": "10"}} ❌
+              
+            - 使用"对话记录工具"记录重要剧情节点
+            - 使用"骰子检定工具"在需要随机性时进行检定
             """,
             tools=tools,
             llm=self.llm,
@@ -342,3 +389,453 @@ class GameMaster:
             ],
             "dialogue_count": len(self.game_state.dialogue_history)
         }
+    
+    def start_scene(self, card: Card) -> Dict[str, Any]:
+        """开始场景对话
+        
+        Args:
+            card: 要执行的卡牌
+            
+        Returns:
+            包含对话结果的字典
+        """
+        try:
+            # 创建默认角色（如果不存在）
+            if "随从" not in self.game_state.characters:
+                self._create_default_follower()
+            
+            if "妓女" not in self.game_state.characters:
+                self._create_default_courtesan()
+            
+            if "老鸨" not in self.game_state.characters:
+                self._create_default_madam()
+            
+            # 设置妓院场景
+            self.setup_brothel_scenario(
+                self.game_state.characters["随从"],
+                card,
+                self.game_state.characters["妓女"],
+                self.game_state.characters["老鸨"]
+            )
+            
+            # 运行自动对话（使用带回调的版本）
+            result = self.run_auto_conversation_with_callback(card)
+            
+            if result["success"]:
+                # 格式化返回结果以匹配 sultans_game_app.py 的期望
+                return {
+                    "success": True,
+                    "conversation_result": result["story_content"],
+                    "scene_state": result["scene_values"],
+                    "characters": {
+                        name: {
+                            "relationships": char.relationships,
+                            "attributes": {
+                                "魅力": char.charm,
+                                "智慧": char.wisdom,
+                                "体魄": char.physique,
+                                "社交": char.social
+                            }
+                        } for name, char in self.game_state.characters.items()
+                    }
+                }
+            else:
+                return result
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"启动场景时发生错误: {str(e)}"
+            }
+    
+    def run_auto_conversation(self, card: Card, max_rounds: int = 10, min_rounds: int = 5) -> Dict[str, Any]:
+        """运行自动多轮对话
+        
+        Args:
+            card: 当前执行的卡牌
+            max_rounds: 最大对话轮数
+            min_rounds: 最小对话轮数
+            
+        Returns:
+            对话结果字典
+        """
+        if not all([self.follower, self.courtesan, self.madam, self.narrator]):
+            raise ValueError("智能体未完全初始化，请先调用setup_brothel_scenario方法")
+        
+        conversation_log = []
+        current_round = 0
+        
+        # 初始场景描述
+        initial_context = f"""
+        【场景开始】
+        夜幕降临，华灯初上。随从带着一张"{card.title}"卡牌来到了城中最著名的妓院。
+        卡牌描述：{card.description}
+        
+        妓院内奢华而神秘，烛光摇曳，香气弥漫。每个人都隐藏着自己的秘密。
+        随从必须在不暴露真实意图的情况下，巧妙地完成卡牌任务。
+        
+        当前场景数值：
+        - 紧张度：{self.game_state.current_scene.scene_values.get('紧张度', 0)}
+        - 暧昧度：{self.game_state.current_scene.scene_values.get('暧昧度', 0)}
+        - 危险度：{self.game_state.current_scene.scene_values.get('危险度', 0)}
+        - 金钱消费：{self.game_state.current_scene.scene_values.get('金钱消费', 0)}
+        """
+        
+        conversation_log.append(f"【旁白】{initial_context}")
+        
+        # 智能体轮换顺序
+        agents_order = [
+            ("旁白", self.narrator),
+            ("随从", self.follower), 
+            ("妓女", self.courtesan),
+            ("老鸨", self.madam)
+        ]
+        
+        try:
+            while current_round < max_rounds:
+                current_round += 1
+                round_conversations = []
+                
+                # 每轮让所有智能体都有机会发言
+                for agent_name, agent in agents_order:
+                    # 构建当前对话上下文
+                    context = self._build_conversation_context(
+                        conversation_log, card, current_round, agent_name
+                    )
+                    
+                    # 创建单轮对话任务
+                    task = Task(
+                        description=context,
+                        expected_output=f"作为{agent_name}，根据当前情况进行一次自然的对话或行动描述（50-200字）",
+                        agent=agent
+                    )
+                    
+                    # 执行单个智能体的对话
+                    crew = Crew(
+                        agents=[agent],
+                        tasks=[task],
+                        verbose=False
+                    )
+                    
+                    try:
+                        response = crew.kickoff()
+                        dialogue_entry = f"【{agent_name}】{response}"
+                        round_conversations.append(dialogue_entry)
+                        conversation_log.append(dialogue_entry)
+                        
+                        # 记录到游戏状态
+                        self.game_state.current_scene.add_conversation(
+                            agent_name, str(response), f"第{current_round}轮对话"
+                        )
+                        
+                    except Exception as e:
+                        error_msg = f"【系统】{agent_name}暂时无法回应：{str(e)}"
+                        round_conversations.append(error_msg)
+                        conversation_log.append(error_msg)
+                
+                # 检查是否应该结束对话
+                if current_round >= min_rounds:
+                    should_end = self._should_end_conversation(
+                        conversation_log, current_round, card
+                    )
+                    if should_end:
+                        ending_msg = f"【旁白】经过{current_round}轮精彩的对话，这个场景告一段落..."
+                        conversation_log.append(ending_msg)
+                        break
+            
+            # 生成最终总结
+            final_summary = self._generate_conversation_summary(conversation_log, card)
+            
+            return {
+                "success": True,
+                "story_content": "\n\n".join(conversation_log),
+                "conversation_rounds": current_round,
+                "final_summary": final_summary,
+                "scene_values": self.game_state.current_scene.scene_values,
+                "dialogue_history": self.game_state.dialogue_history
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"自动对话过程中发生错误: {str(e)}",
+                "partial_conversation": "\n\n".join(conversation_log) if conversation_log else "无对话记录"
+            }
+    
+    def run_auto_conversation_with_callback(self, card: Card, callback_func=None, max_rounds: int = 10, min_rounds: int = 5) -> Dict[str, Any]:
+        """运行自动多轮对话（支持实时回调）
+        
+        Args:
+            card: 当前执行的卡牌
+            callback_func: 回调函数，用于实时更新界面
+            max_rounds: 最大对话轮数
+            min_rounds: 最小对话轮数
+            
+        Returns:
+            对话结果字典
+        """
+        if not all([self.follower, self.courtesan, self.madam, self.narrator]):
+            raise ValueError("智能体未完全初始化，请先调用setup_brothel_scenario方法")
+        
+        conversation_log = []
+        current_round = 0
+        
+        # 初始场景描述
+        initial_context = f"""
+        【场景开始】
+        夜幕降临，华灯初上。随从带着一张"{card.title}"卡牌来到了城中最著名的妓院。
+        卡牌描述：{card.description}
+        
+        妓院内奢华而神秘，烛光摇曳，香气弥漫。每个人都隐藏着自己的秘密。
+        随从必须在不暴露真实意图的情况下，巧妙地完成卡牌任务。
+        """
+        
+        conversation_log.append(f"【旁白】{initial_context}")
+        
+        # 调用回调函数更新界面
+        if callback_func:
+            callback_func("init", 0, max_rounds, "旁白", initial_context, conversation_log)
+        
+        # 智能体轮换顺序
+        agents_order = [
+            ("旁白", self.narrator),
+            ("随从", self.follower), 
+            ("妓女", self.courtesan),
+            ("老鸨", self.madam)
+        ]
+        
+        try:
+            while current_round < max_rounds:
+                current_round += 1
+                
+                # 每轮让所有智能体都有机会发言
+                for agent_name, agent in agents_order:
+                    # 通知界面当前发言者
+                    if callback_func:
+                        callback_func("speaking", current_round, max_rounds, agent_name, "", conversation_log)
+                    
+                    # 构建当前对话上下文
+                    context = self._build_conversation_context(
+                        conversation_log, card, current_round, agent_name
+                    )
+                    
+                    # 创建单轮对话任务
+                    task = Task(
+                        description=context,
+                        expected_output=f"作为{agent_name}，根据当前情况进行一次自然的对话或行动描述（50-200字）",
+                        agent=agent
+                    )
+                    
+                    # 执行单个智能体的对话
+                    crew = Crew(
+                        agents=[agent],
+                        tasks=[task],
+                        verbose=False
+                    )
+                    
+                    try:
+                        response = crew.kickoff()
+                        dialogue_entry = f"【{agent_name}】{response}"
+                        conversation_log.append(dialogue_entry)
+                        
+                        # 记录到游戏状态
+                        self.game_state.current_scene.add_conversation(
+                            agent_name, str(response), f"第{current_round}轮对话"
+                        )
+                        
+                        # 调用回调函数更新界面
+                        if callback_func:
+                            callback_func("response", current_round, max_rounds, agent_name, str(response), conversation_log)
+                        
+                    except Exception as e:
+                        error_msg = f"【系统】{agent_name}暂时无法回应：{str(e)}"
+                        conversation_log.append(error_msg)
+                        
+                        # 调用回调函数更新界面
+                        if callback_func:
+                            callback_func("error", current_round, max_rounds, agent_name, error_msg, conversation_log)
+                
+                # 检查是否应该结束对话
+                if current_round >= min_rounds:
+                    should_end = self._should_end_conversation(
+                        conversation_log, current_round, card
+                    )
+                    if should_end:
+                        ending_msg = f"【旁白】经过{current_round}轮精彩的对话，这个场景告一段落..."
+                        conversation_log.append(ending_msg)
+                        
+                        # 调用回调函数更新界面
+                        if callback_func:
+                            callback_func("ending", current_round, max_rounds, "旁白", ending_msg, conversation_log)
+                        break
+            
+            # 生成最终总结
+            final_summary = self._generate_conversation_summary(conversation_log, card)
+            
+            # 调用回调函数更新界面
+            if callback_func:
+                callback_func("complete", current_round, max_rounds, "系统", final_summary, conversation_log)
+            
+            return {
+                "success": True,
+                "story_content": "\n\n".join(conversation_log),
+                "conversation_rounds": current_round,
+                "final_summary": final_summary,
+                "scene_values": self.game_state.current_scene.scene_values,
+                "dialogue_history": self.game_state.dialogue_history
+            }
+            
+        except Exception as e:
+            error_result = {
+                "success": False,
+                "error": f"自动对话过程中发生错误: {str(e)}",
+                "partial_conversation": "\n\n".join(conversation_log) if conversation_log else "无对话记录"
+            }
+            
+            # 调用回调函数更新界面
+            if callback_func:
+                callback_func("error", current_round, max_rounds, "系统", str(e), conversation_log)
+            
+            return error_result
+    
+    def _build_conversation_context(self, conversation_log: List[str], card: Card, 
+                                  current_round: int, agent_name: str) -> str:
+        """构建对话上下文"""
+        recent_conversations = conversation_log[-6:] if len(conversation_log) > 6 else conversation_log
+        
+        context = f"""
+        你是{agent_name}，现在是第{current_round}轮对话。
+        
+        卡牌任务：{card.title} - {card.description}
+        
+        最近的对话内容：
+        {chr(10).join(recent_conversations)}
+        
+        当前场景状态：
+        - 位置：{self.game_state.current_scene.location}
+        - 氛围：{self.game_state.current_scene.atmosphere}
+        - 紧张度：{self.game_state.current_scene.scene_values.get('紧张度', 0)}
+        - 暧昧度：{self.game_state.current_scene.scene_values.get('暧昧度', 0)}
+        - 危险度：{self.game_state.current_scene.scene_values.get('危险度', 0)}
+        
+        请根据你的角色身份和当前情况，进行自然的对话或行动。
+        注意：
+        1. 保持角色一致性
+        2. 推动剧情发展
+        3. 与其他角色产生有意义的互动
+        4. 不要重复之前说过的话
+        5. 回应要简洁有力（50-200字）
+        """
+        
+        return context
+    
+    def _should_end_conversation(self, conversation_log: List[str], current_round: int, card: Card) -> bool:
+        """判断是否应该结束对话"""
+        # 基本结束条件
+        if current_round >= 10:  # 最大轮数限制
+            return True
+        
+        # 检查是否达到了某些剧情节点
+        recent_text = " ".join(conversation_log[-4:]).lower()
+        
+        # 结束关键词
+        end_keywords = [
+            "离开", "告辞", "结束", "完成", "任务达成", 
+            "不欢而散", "心满意足", "目标完成", "时间不早"
+        ]
+        
+        for keyword in end_keywords:
+            if keyword in recent_text:
+                return True
+        
+        # 检查场景数值是否达到极值
+        scene_values = self.game_state.current_scene.scene_values
+        if (scene_values.get('紧张度', 0) >= 80 or 
+            scene_values.get('危险度', 0) >= 80 or
+            scene_values.get('金钱消费', 0) >= 100):
+            return True
+        
+        return False
+    
+    def _generate_conversation_summary(self, conversation_log: List[str], card: Card) -> str:
+        """生成对话总结"""
+        total_rounds = len([log for log in conversation_log if "【" in log and "】" in log])
+        
+        summary = f"""
+        【场景总结】
+        卡牌任务：{card.title}
+        对话轮数：{total_rounds}
+        最终场景数值：
+        - 紧张度：{self.game_state.current_scene.scene_values.get('紧张度', 0)}
+        - 暧昧度：{self.game_state.current_scene.scene_values.get('暧昧度', 0)}
+        - 危险度：{self.game_state.current_scene.scene_values.get('危险度', 0)}
+        - 金钱消费：{self.game_state.current_scene.scene_values.get('金钱消费', 0)}
+        
+        这次妓院之行充满了戏剧性，每个角色都展现了自己的特色，
+        故事在紧张与暧昧中展开，最终形成了一个完整的剧情片段。
+        """
+        
+        return summary
+    
+    def _create_default_follower(self):
+        """创建默认随从角色"""
+        from sultans_game.models import Character
+        follower = Character(
+            name="随从",
+            role="随从",
+            personality="忠诚而机智，善于隐藏真实意图",
+            attributes={
+                "体魄": 70,
+                "魅力": 60,
+                "智慧": 75,
+                "隐匿": 80,
+                "战斗": 65,
+                "防御": 60,
+                "社交": 70,
+                "声望": 50
+            }
+        )
+        self.game_state.characters["随从"] = follower
+        return follower
+    
+    def _create_default_courtesan(self):
+        """创建默认妓女角色"""
+        from sultans_game.models import Character
+        courtesan = Character(
+            name="妓女",
+            role="妓女",
+            personality="魅力四射，善于察言观色",
+            attributes={
+                "体魄": 60,
+                "魅力": 90,
+                "智慧": 70,
+                "隐匿": 75,
+                "战斗": 30,
+                "防御": 40,
+                "社交": 85,
+                "声望": 60
+            }
+        )
+        self.game_state.characters["妓女"] = courtesan
+        return courtesan
+    
+    def _create_default_madam(self):
+        """创建默认老鸨角色"""
+        from sultans_game.models import Character
+        madam = Character(
+            name="老鸨",
+            role="老鸨",
+            personality="精明能干，保护妓院利益",
+            attributes={
+                "体魄": 50,
+                "魅力": 70,
+                "智慧": 85,
+                "隐匿": 60,
+                "战斗": 40,
+                "防御": 50,
+                "社交": 90,
+                "声望": 75
+            }
+        )
+        self.game_state.characters["老鸨"] = madam
+        return madam

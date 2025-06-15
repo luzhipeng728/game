@@ -180,6 +180,137 @@ def main():
         
         st.divider()
         
+        # 实时场景数值显示
+        st.header("📊 实时场景数值")
+        
+        # 显示最后更新时间
+        if 'last_update_time' in st.session_state:
+            st.caption(f"🕒 最后更新: {st.session_state.last_update_time}")
+        
+        # 创建场景数值显示容器 - 使用 st.empty() 来支持实时更新
+        if 'scene_values_placeholder' not in st.session_state:
+            st.session_state.scene_values_placeholder = st.empty()
+        
+        # 定义更新场景数值显示的函数
+        def update_scene_values_display():
+            scene = st.session_state.game_state.current_scene
+            
+            # 获取当前数值
+            tension_value = scene.scene_values.get('紧张度', 0)
+            romance_value = scene.scene_values.get('暧昧度', 0)
+            danger_value = scene.scene_values.get('危险度', 0)
+            money_value = scene.scene_values.get('金钱消费', 0)
+            
+            # 计算数值变化（如果有历史数据）
+            tension_delta = None
+            romance_delta = None
+            danger_delta = None
+            money_delta = None
+            
+            if 'previous_scene_values' in st.session_state:
+                prev_values = st.session_state.previous_scene_values
+                tension_delta = tension_value - prev_values.get('紧张度', 0)
+                romance_delta = romance_value - prev_values.get('暧昧度', 0)
+                danger_delta = danger_value - prev_values.get('危险度', 0)
+                money_delta = money_value - prev_values.get('金钱消费', 0)
+            
+            # 更新历史数据
+            st.session_state.previous_scene_values = scene.scene_values.copy()
+            
+            # 使用 with 语句来更新 placeholder 的内容
+            with st.session_state.scene_values_placeholder.container():
+                # 数值显示
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # 紧张度
+                    st.metric(
+                        label="⚡ 紧张度",
+                        value=f"{tension_value}/100",
+                        delta=tension_delta if tension_delta and tension_delta != 0 else None,
+                        help="场景的紧张程度，影响事件发生的概率"
+                    )
+                    
+                    # 危险度
+                    st.metric(
+                        label="⚠️ 危险度",
+                        value=f"{danger_value}/100",
+                        delta=danger_delta if danger_delta and danger_delta != 0 else None,
+                        help="当前场景的危险程度，影响安全性"
+                    )
+                
+                with col2:
+                    # 暧昧度
+                    st.metric(
+                        label="💕 暧昧度",
+                        value=f"{romance_value}/100",
+                        delta=romance_delta if romance_delta and romance_delta != 0 else None,
+                        help="角色间的暧昧程度，影响关系发展"
+                    )
+                    
+                    # 金钱消费
+                    st.metric(
+                        label="💰 金钱消费",
+                        value=f"{money_value} 金币",
+                        delta=money_delta if money_delta and money_delta != 0 else None,
+                        help="本次场景中的金钱花费"
+                    )
+                
+                # 数值条形图显示
+                st.write("**数值可视化:**")
+                
+                # 使用进度条显示各项数值，并添加颜色
+                col_a, col_b = st.columns(2)
+                
+                with col_a:
+                    st.write("⚡ 紧张度")
+                    st.progress(tension_value / 100)
+                    
+                    st.write("⚠️ 危险度")  
+                    st.progress(danger_value / 100)
+                
+                with col_b:
+                    st.write("💕 暧昧度")
+                    st.progress(romance_value / 100)
+                    
+                    # 金钱消费用不同的显示方式
+                    st.write("💰 金钱消费")
+                    if money_value > 0:
+                        st.write(f"💸 已花费 {money_value} 金币")
+                    else:
+                        st.write("💰 尚未消费")
+                
+                # 数值状态提示
+                status_messages = []
+                if tension_value >= 80:
+                    status_messages.append("⚡ 场面非常紧张！")
+                elif tension_value >= 60:
+                    status_messages.append("⚡ 气氛有些紧张")
+                    
+                if romance_value >= 80:
+                    status_messages.append("💕 暧昧气氛浓厚")
+                elif romance_value >= 60:
+                    status_messages.append("💕 关系逐渐亲密")
+                    
+                if danger_value >= 80:
+                    status_messages.append("⚠️ 危险！需要小心")
+                elif danger_value >= 60:
+                    status_messages.append("⚠️ 情况有些危险")
+                    
+                if money_value >= 50:
+                    status_messages.append("💰 花费不少金钱")
+                
+                if status_messages:
+                    st.info(" | ".join(status_messages))
+        
+        # 初始显示场景数值
+        update_scene_values_display()
+        
+        # 将更新函数保存到 session_state 中，供回调函数使用
+        st.session_state.update_scene_values_display = update_scene_values_display
+        
+        st.divider()
+        
         # 清除历史记录
         if st.button("🗑️ 清除对话历史"):
             st.session_state.conversation_history = []
@@ -206,43 +337,308 @@ def main():
         else:
             st.info("请先生成一张卡牌来开始游戏")
         
-        # 开始对话按钮
-        if st.button("🎭 开始场景对话", disabled=st.session_state.current_card is None):
-            with st.spinner("智能体们正在交流中..."):
-                try:
-                    # 执行对话
-                    result = st.session_state.game_master.start_scene(st.session_state.current_card)
-                    
-                    if result.get("success", False):
-                        # 添加到对话历史
-                        conversation_entry = {
-                            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "card": st.session_state.current_card.title,
-                            "result": result["conversation_result"],
-                            "scene_state": result["scene_state"],
-                            "characters": result["characters"]
-                        }
-                        st.session_state.conversation_history.append(conversation_entry)
-                        
-                        st.success("对话完成！")
-                        st.rerun()
+        # 对话设置
+        st.subheader("🎛️ 对话设置")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            max_rounds = st.slider("最大对话轮数", 5, 15, 10)
+        with col_b:
+            min_rounds = st.slider("最小对话轮数", 3, 8, 5)
+        
+        # 开始自动对话按钮
+        if st.button("🎭 开始自动对话", disabled=st.session_state.current_card is None):
+            # 初始化实时对话状态
+            if 'live_dialogue' not in st.session_state:
+                st.session_state.live_dialogue = []
+            if 'dialogue_in_progress' not in st.session_state:
+                st.session_state.dialogue_in_progress = False
+            
+            # 设置对话进行中状态
+            st.session_state.dialogue_in_progress = True
+            st.session_state.live_dialogue = []
+            
+            # 创建实时对话显示区域
+            st.markdown("### 🎭 实时对话")
+            
+            # 进度和状态显示
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # 实时场景数值显示（在对话区域）
+            st.markdown("#### 📊 实时场景数值")
+            realtime_values_area = st.empty()
+            
+            # 实时对话显示区域
+            dialogue_area = st.empty()
+            
+            def format_dialogue_for_display(dialogue_list):
+                """格式化对话内容用于显示"""
+                formatted_content = []
+                for dialogue in dialogue_list[-15:]:  # 显示最近15条对话
+                    if "【旁白】" in dialogue:
+                        formatted_content.append(f"🎭 {dialogue}")
+                    elif "【随从】" in dialogue:
+                        formatted_content.append(f"🤵 {dialogue}")
+                    elif "【妓女】" in dialogue:
+                        formatted_content.append(f"💃 {dialogue}")
+                    elif "【老鸨】" in dialogue:
+                        formatted_content.append(f"👩‍💼 {dialogue}")
+                    elif "【系统】" in dialogue:
+                        formatted_content.append(f"⚙️ {dialogue}")
                     else:
-                        st.error(f"对话执行失败: {result.get('error', '未知错误')}")
+                        formatted_content.append(dialogue)
+                return "\n\n".join(formatted_content)
+            
+            # 使用 st.empty() 和定期更新来模拟实时显示
+            class StreamlitCallback:
+                def __init__(self, progress_bar, status_text, dialogue_area, realtime_values_area):
+                    self.progress_bar = progress_bar
+                    self.status_text = status_text
+                    self.dialogue_area = dialogue_area
+                    self.realtime_values_area = realtime_values_area
+                    self.dialogue_log = []
+                
+                def update_realtime_values(self):
+                    """更新实时场景数值显示"""
+                    try:
+                        scene = st.session_state.game_state.current_scene
                         
-                except Exception as e:
-                    st.error(f"执行对话时发生错误: {e}")
+                        # 获取当前数值
+                        tension_value = scene.scene_values.get('紧张度', 0)
+                        romance_value = scene.scene_values.get('暧昧度', 0)
+                        danger_value = scene.scene_values.get('危险度', 0)
+                        money_value = scene.scene_values.get('金钱消费', 0)
+                        
+                        # 创建实时数值显示内容
+                        values_content = f"""
+                        **当前场景数值：**
+                        
+                        ⚡ 紧张度：{tension_value}/100 | 💕 暧昧度：{romance_value}/100 | ⚠️ 危险度：{danger_value}/100 | 💰 金钱消费：{money_value} 金币
+                        
+                        ---
+                        """
+                        
+                        # 更新显示
+                        self.realtime_values_area.markdown(values_content)
+                        
+                    except Exception as e:
+                        print(f"更新实时数值显示时出错: {e}")
+                        pass
+                
+                def __call__(self, event_type, current_round, total_rounds, agent_name, content, full_log):
+                    # 更新进度
+                    if total_rounds > 0:
+                        progress = current_round / total_rounds
+                        self.progress_bar.progress(min(progress, 1.0))
+                    
+                    # 更新状态文本
+                    if event_type == "init":
+                        self.status_text.text("🎬 场景初始化中...")
+                        self.dialogue_log.append(content)
+                    elif event_type == "speaking":
+                        self.status_text.text(f"🎤 第 {current_round}/{total_rounds} 轮 - {agent_name} 正在思考...")
+                    elif event_type == "response":
+                        self.status_text.text(f"💬 第 {current_round}/{total_rounds} 轮 - {agent_name} 发言完毕")
+                        self.dialogue_log.append(f"【{agent_name}】{content}")
+                        
+                        # 更新实时场景数值显示
+                        self.update_realtime_values()
+                        
+                        # 触发页面重新渲染以更新侧边栏数值
+                        try:
+                            # 更新时间戳
+                            st.session_state.last_update_time = datetime.now().strftime("%H:%M:%S")
+                            
+                            # 调用场景数值更新函数（如果存在）
+                            if hasattr(st.session_state, 'update_scene_values_display'):
+                                st.session_state.update_scene_values_display()
+                                
+                        except Exception as e:
+                            # 忽略可能的错误，但记录到日志
+                            print(f"更新场景数值时出错: {e}")
+                            pass
+                            
+                    elif event_type == "error":
+                        self.status_text.text(f"❌ {agent_name} 发生错误")
+                        self.dialogue_log.append(f"【系统】{content}")
+                    elif event_type == "ending":
+                        self.status_text.text("🎬 对话即将结束...")
+                        self.dialogue_log.append(content)
+                    elif event_type == "complete":
+                        self.status_text.text("✅ 对话完成！")
+                        self.progress_bar.progress(1.0)
+                        
+                        # 最终更新实时场景数值显示
+                        self.update_realtime_values()
+                        
+                        # 最终更新侧边栏数值
+                        try:
+                            st.session_state.last_update_time = datetime.now().strftime("%H:%M:%S")
+                            
+                            # 最终调用场景数值更新函数
+                            if hasattr(st.session_state, 'update_scene_values_display'):
+                                st.session_state.update_scene_values_display()
+                        except Exception as e:
+                            print(f"最终更新场景数值时出错: {e}")
+                            pass
+                    
+                    # 更新对话显示
+                    formatted_dialogue = format_dialogue_for_display(self.dialogue_log)
+                    self.dialogue_area.markdown(formatted_dialogue)
+            
+            # 创建回调实例
+            callback = StreamlitCallback(progress_bar, status_text, dialogue_area, realtime_values_area)
+            
+            try:
+                # 显示开始信息
+                status_text.text("🚀 正在启动自动对话...")
+                
+                # 确保角色存在，如果不存在则创建默认角色
+                if "随从" not in st.session_state.game_state.characters:
+                    follower = st.session_state.game_master._create_default_follower()
+                else:
+                    follower = st.session_state.game_state.characters["随从"]
+                
+                if "妓女" not in st.session_state.game_state.characters:
+                    courtesan = st.session_state.game_master._create_default_courtesan()
+                else:
+                    courtesan = st.session_state.game_state.characters["妓女"]
+                
+                if "老鸨" not in st.session_state.game_state.characters:
+                    madam = st.session_state.game_master._create_default_madam()
+                else:
+                    madam = st.session_state.game_state.characters["老鸨"]
+                
+                # 设置妓院场景和智能体
+                st.session_state.game_master.setup_brothel_scenario(
+                    follower,
+                    st.session_state.current_card,
+                    courtesan,
+                    madam
+                )
+                
+                # 执行自动对话（带实时回调）
+                result = st.session_state.game_master.run_auto_conversation_with_callback(
+                    st.session_state.current_card,
+                    callback_func=callback,
+                    max_rounds=max_rounds,
+                    min_rounds=min_rounds
+                )
+                
+                # 重置对话状态
+                st.session_state.dialogue_in_progress = False
+                
+                if result.get("success", False):
+                    # 添加到对话历史
+                    conversation_entry = {
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "card": st.session_state.current_card.title,
+                        "result": result["story_content"],
+                        "scene_state": result["scene_values"],
+                        "characters": {
+                            name: {
+                                "relationships": char.relationships,
+                                "attributes": {
+                                    "魅力": char.charm,
+                                    "智慧": char.wisdom,
+                                    "体魄": char.physique,
+                                    "社交": char.social
+                                }
+                            } for name, char in st.session_state.game_state.characters.items()
+                        },
+                        "rounds": result.get("conversation_rounds", 0),
+                        "summary": result.get("final_summary", "")
+                    }
+                    st.session_state.conversation_history.append(conversation_entry)
+                    
+                    # 显示成功信息
+                    st.success(f"🎉 自动对话完成！共进行了 {result.get('conversation_rounds', 0)} 轮对话")
+                    
+                    # 显示最终总结
+                    if result.get("final_summary"):
+                        st.markdown("### 📋 场景总结")
+                        st.markdown(result["final_summary"])
+                    
+                    # 提示用户刷新查看历史记录
+                    st.info("💡 对话已保存到历史记录中，您可以在下方查看完整内容")
+                    
+                else:
+                    st.error(f"对话执行失败: {result.get('error', '未知错误')}")
+                    if result.get("partial_conversation"):
+                        st.markdown("### 部分对话内容")
+                        st.text(result["partial_conversation"])
+                    
+            except Exception as e:
+                st.session_state.dialogue_in_progress = False
+                st.error(f"执行对话时发生错误: {e}")
+                import traceback
+                st.text(traceback.format_exc())
+        
+        # 添加说明
+        st.info("""
+        💡 **自动对话说明：**
+        - 点击按钮后，四个智能体（旁白、随从、妓女、老鸨）将自动进行多轮对话
+        - 每轮对话中，每个角色都会根据当前情况自然地发言
+        - 对话会在达到最小轮数后，根据剧情发展自动结束
+        - 您无需任何操作，只需等待对话完成即可
+        """)
         
         # 显示对话历史
         if st.session_state.conversation_history:
             st.header("📖 对话历史")
             
             for i, entry in enumerate(reversed(st.session_state.conversation_history)):
-                with st.expander(f"对话 {len(st.session_state.conversation_history) - i}: {entry['card']} ({entry['timestamp']})"):
-                    st.markdown(entry["result"])
+                # 构建标题，包含轮数信息
+                title_parts = [f"对话 {len(st.session_state.conversation_history) - i}"]
+                title_parts.append(f"{entry['card']}")
+                if "rounds" in entry:
+                    title_parts.append(f"({entry['rounds']}轮)")
+                title_parts.append(f"({entry['timestamp']})")
+                title = ": ".join(title_parts)
+                
+                with st.expander(title):
+                    # 显示对话内容
+                    st.markdown("### 📜 对话内容")
+                    # 将对话内容按段落分割，更好地显示
+                    dialogue_parts = entry["result"].split("\n\n")
+                    for part in dialogue_parts:
+                        if part.strip():
+                            # 检查是否是角色对话
+                            if "【" in part and "】" in part:
+                                # 提取角色名和对话内容
+                                if "【旁白】" in part:
+                                    st.markdown(f"🎭 {part}")
+                                elif "【随从】" in part:
+                                    st.markdown(f"🤵 {part}")
+                                elif "【妓女】" in part:
+                                    st.markdown(f"💃 {part}")
+                                elif "【老鸨】" in part:
+                                    st.markdown(f"👩‍💼 {part}")
+                                else:
+                                    st.markdown(part)
+                            else:
+                                st.markdown(part)
+                    
+                    # 显示总结（如果有）
+                    if "summary" in entry and entry["summary"]:
+                        st.markdown("### 📋 场景总结")
+                        st.markdown(entry["summary"])
+                    
+                    # 显示场景数值变化
+                    if "scene_state" in entry:
+                        st.markdown("### 📊 场景数值")
+                        cols = st.columns(4)
+                        scene_values = entry["scene_state"]
+                        for idx, (key, value) in enumerate(scene_values.items()):
+                            with cols[idx % 4]:
+                                if key == "金钱消费":
+                                    st.metric(key, f"{value} 金币")
+                                else:
+                                    st.metric(key, f"{value}/100")
                     
                     # 显示角色状态变化
                     if "characters" in entry:
-                        st.subheader("角色状态")
+                        st.markdown("### 👥 角色状态")
                         for char_name, char_data in entry["characters"].items():
                             if char_data.get("relationships"):
                                 st.write(f"**{char_name} 的关系变化:**")
