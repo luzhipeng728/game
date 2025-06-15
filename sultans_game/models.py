@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
+import uuid
 
 class CardType(Enum):
     """卡牌类型"""
@@ -29,9 +30,11 @@ class Card:
     rewards: Dict[str, int] = field(default_factory=dict)
     penalty: Dict[str, int] = field(default_factory=dict)
     time_limit_days: int = 7
+    card_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "card_id": self.card_id,
             "card_type": self.card_type.value,
             "rank": self.rank.value,
             "title": self.title,
@@ -55,12 +58,47 @@ class Character:
         "体魄": 50,
         "战斗": 50,
         "社交": 50,
-        "隐匿": 50
+        "隐匿": 50,
+        "防御": 50,
+        "声望": 50
     })
     relationships: Dict[str, int] = field(default_factory=dict)  # 与其他角色的关系值
     status: Dict[str, Any] = field(default_factory=dict)  # 状态信息
     inventory: List[str] = field(default_factory=list)
     alive: bool = True
+    
+    # 便捷属性访问
+    @property
+    def charm(self) -> int:
+        return self.attributes.get("魅力", 50)
+    
+    @property
+    def wisdom(self) -> int:
+        return self.attributes.get("智慧", 50)
+    
+    @property
+    def physique(self) -> int:
+        return self.attributes.get("体魄", 50)
+    
+    @property
+    def combat(self) -> int:
+        return self.attributes.get("战斗", 50)
+    
+    @property
+    def social(self) -> int:
+        return self.attributes.get("社交", 50)
+    
+    @property
+    def stealth(self) -> int:
+        return self.attributes.get("隐匿", 50)
+    
+    @property
+    def defense(self) -> int:
+        return self.attributes.get("防御", 50)
+    
+    @property
+    def reputation(self) -> int:
+        return self.attributes.get("声望", 50)
     
     def get_relationship(self, target: str) -> int:
         """获取与目标角色的关系值"""
@@ -128,8 +166,9 @@ class SceneState:
 class GameState:
     """游戏状态类"""
     current_scene: SceneState
-    active_card: Optional[Card] = None
+    active_cards: List[Card] = field(default_factory=list)  # 支持多张激活卡牌
     characters: Dict[str, Character] = field(default_factory=dict)
+    dialogue_history: List[Dict[str, Any]] = field(default_factory=list)  # 对话历史
     day: int = 1
     resources: Dict[str, int] = field(default_factory=lambda: {
         "金币": 100,
@@ -138,12 +177,25 @@ class GameState:
     })
     flags: Dict[str, bool] = field(default_factory=dict)
     
+    # 为了向后兼容，保留active_card属性
+    @property
+    def active_card(self) -> Optional[Card]:
+        return self.active_cards[0] if self.active_cards else None
+    
+    @active_card.setter
+    def active_card(self, card: Optional[Card]):
+        if card:
+            self.active_cards = [card]
+        else:
+            self.active_cards = []
+    
     def save_to_json(self) -> str:
         """保存游戏状态为JSON"""
         data = {
             "current_scene": self.current_scene.to_dict(),
-            "active_card": self.active_card.to_dict() if self.active_card else None,
+            "active_cards": [card.to_dict() for card in self.active_cards],
             "characters": {name: char.to_dict() for name, char in self.characters.items()},
+            "dialogue_history": self.dialogue_history,
             "day": self.day,
             "resources": self.resources,
             "flags": self.flags
