@@ -150,7 +150,7 @@ def card_usage_tool(card_id: str, action: str, target: str = "") -> str:
     """使用卡牌或采取行动
     
     Args:
-        card_id: 卡牌ID
+        card_id: 卡牌ID或卡牌标题
         action: 行动类型（使用、放弃、保留）
         target: 目标角色或对象
         
@@ -161,10 +161,10 @@ def card_usage_tool(card_id: str, action: str, target: str = "") -> str:
     if not game_state:
         return json.dumps({"error": "游戏状态未初始化"}, ensure_ascii=False)
     
-    # 查找卡牌
+    # 查找卡牌（支持按ID或标题查找）
     card = None
     for c in game_state.active_cards:
-        if c.card_id == card_id:
+        if c.card_id == card_id or c.title == card_id:
             card = c
             break
     
@@ -172,31 +172,83 @@ def card_usage_tool(card_id: str, action: str, target: str = "") -> str:
         return json.dumps({"error": f"未找到卡牌 {card_id}"}, ensure_ascii=False)
     
     result = {
-        "card_id": card_id,
+        "card_id": card.card_id,
         "card_title": card.title,
         "action": action,
         "target": target,
         "success": False,
-        "consequences": []
+        "consequences": [],
+        "scene_changes": {}
     }
     
     if action == "使用":
-        # 模拟卡牌使用结果
+        # 检查是否满足使用条件
+        if not card.can_be_used:
+            result["consequences"] = [f"卡牌{card.title}当前不能使用，条件未满足"]
+            return json.dumps(result, ensure_ascii=False)
+        
+        # 执行卡牌效果
         success_chance = random.randint(1, 100)
-        if success_chance > 30:  # 70%成功率
+        base_success_rate = 70  # 基础成功率
+        
+        # 根据卡牌品级调整成功率
+        rank_bonus = {
+            "岩石": 0,
+            "青铜": 10, 
+            "白银": 20,
+            "黄金": 30
+        }
+        final_success_rate = base_success_rate + rank_bonus.get(card.rank.value, 0)
+        
+        if success_chance <= final_success_rate:
             result["success"] = True
             result["consequences"] = [
-                f"成功执行了{card.title}",
-                f"获得了{card.rewards}奖励"
+                f"成功使用了{card.title}！",
+                f"目标：{card.usage_objective}",
+                f"获得奖励：{card.rewards}"
             ]
+            
+            # 应用奖励和惩罚
+            if card.rewards:
+                for key, value in card.rewards.items():
+                    if key in game_state.resources:
+                        game_state.resources[key] += value
+                        result["consequences"].append(f"{key} +{value}")
+            
+            if card.penalty:
+                for key, value in card.penalty.items():
+                    if key in game_state.current_scene.scene_values:
+                        old_value = game_state.current_scene.scene_values[key]
+                        new_value = max(0, old_value + value)
+                        game_state.current_scene.scene_values[key] = new_value
+                        result["scene_changes"][key] = {"old": old_value, "new": new_value, "change": value}
+                        result["consequences"].append(f"{key} {value:+d}")
+            
+            # 根据卡牌类型设置游戏结局
+            if card.game_ending:
+                result["game_ending"] = card.game_ending
+                result["consequences"].append(f"游戏结束：{card.game_ending}")
             
             # 从活动卡牌中移除
             game_state.active_cards.remove(card)
+            
         else:
             result["consequences"] = [
-                f"执行{card.title}失败",
-                "可能产生负面后果"
+                f"尝试使用{card.title}失败！",
+                "可能产生意外后果..."
             ]
+            
+            # 失败可能导致负面效果
+            if card.penalty:
+                for key, value in card.penalty.items():
+                    if key in game_state.current_scene.scene_values:
+                        # 失败时惩罚减半
+                        penalty_value = value // 2
+                        old_value = game_state.current_scene.scene_values[key]
+                        new_value = max(0, old_value + penalty_value)
+                        game_state.current_scene.scene_values[key] = new_value
+                        result["scene_changes"][key] = {"old": old_value, "new": new_value, "change": penalty_value}
+                        result["consequences"].append(f"{key} {penalty_value:+d}（失败惩罚）")
     
     elif action == "放弃":
         game_state.active_cards.remove(card)
@@ -346,11 +398,11 @@ class GameToolsManager:
     def get_tools_by_agent_type(self, agent_type: str) -> List:
         """根据智能体类型获取相应工具"""
         if agent_type == "follower":
-            return [card_usage_tool, dice_roll_tool, dialogue_recorder_tool]
+            return [card_usage_tool, dice_roll_tool, dialogue_recorder_tool, scene_control_tool]
         elif agent_type == "courtesan":
-            return [relationship_tool, scene_value_tool, dialogue_recorder_tool]
+            return [relationship_tool, dialogue_recorder_tool]
         elif agent_type == "madam":
-            return [relationship_tool, scene_value_tool, scene_control_tool]
+            return [relationship_tool, dialogue_recorder_tool]
         elif agent_type == "narrator":
             return [scene_control_tool, dialogue_recorder_tool, dice_roll_tool]
         else:

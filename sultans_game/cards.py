@@ -276,3 +276,88 @@ class CardGenerator:
             rewards={"经验": 20, "教学完成": 1},
             penalty={"金币": -10}
         )
+
+"""卡牌系统工厂"""
+
+def create_sample_cards():
+    """创建示例卡片"""
+    cards = []
+    
+    # 杀戮卡 - 危险度≥60时可使用
+    murder_card = Card(
+        card_type=CardType.MURDER,
+        rank=CardRank.SILVER,
+        title="致命一击",
+        description="在危机时刻对敌人发动致命攻击",
+        usage_objective="在危险情况下消除威胁，保护主人安全",
+        trigger_condition={"危险度": 60},
+        target_character="敌人",
+        required_actions=["战斗", "暗杀"],
+        rewards={"声望": 20, "金币": 50},
+        penalty={"危险度": -30},
+        auto_trigger=True,
+        priority=9,
+        is_active=True
+    )
+    
+    # 纵欲卡 - 暧昧度≥60时可使用
+    lust_card = Card(
+        card_type=CardType.LUST,
+        rank=CardRank.GOLD,
+        title="魅惑之术",
+        description="运用魅力获取关键信息或达成目标",
+        usage_objective="在暧昧气氛浓厚时施展魅力，获取重要情报或好感",
+        trigger_condition={"暧昧度": 60},
+        target_character="妓女",
+        required_actions=["魅惑", "社交"],
+        rewards={"情报": 30, "关系": 25},
+        penalty={"声望": -10},
+        auto_trigger=True,
+        priority=8,
+        is_active=True
+    )
+    
+    # 奢靡卡 - 金钱消费≥50时可使用
+    luxury_card = Card(
+        card_type=CardType.LUXURY,
+        rank=CardRank.BRONZE,
+        title="挥金如土",
+        description="通过豪华消费展示实力，赢得尊重",
+        usage_objective="用金钱展示实力和地位，获得关键人物的信任",
+        trigger_condition={"金钱消费": 50},
+        target_character="老鸨",
+        required_actions=["消费", "炫富"],
+        rewards={"声望": 30, "关系": 20},
+        penalty={"金币": -100},
+        auto_trigger=True,
+        priority=6,
+        is_active=True
+    )
+    
+    # 征服卡 - 紧张度≥70时可使用
+    conquest_card = Card(
+        card_type=CardType.CONQUEST,
+        rank=CardRank.GOLD,
+        title="强势征服",
+        description="在紧张对峙中展现强势，征服对手",
+        usage_objective="在高度紧张的对峙中展现力量，迫使对方屈服",
+        trigger_condition={"紧张度": 70},
+        target_character="所有敌对角色",
+        required_actions=["威胁", "展示力量"],
+        rewards={"声望": 40, "威慑": 30},
+        penalty={"关系": -20},
+        auto_trigger=True,
+        priority=7,
+        is_active=True
+    )
+    
+    cards.extend([murder_card, lust_card, luxury_card, conquest_card])
+    return cards
+
+def get_card_by_type(card_type: CardType) -> Card:
+    """根据类型获取对应的卡片"""
+    cards = create_sample_cards()
+    for card in cards:
+        if card.card_type == card_type:
+            return card
+    return cards[0]  # 默认返回第一张卡片

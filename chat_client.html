@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>苏丹的游戏 - 改进版多智能体聊天</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 95%;
+            max-width: 1400px;
+            height: 95vh;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 320px;
+            background: linear-gradient(180deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .role-selection {
+            margin-bottom: 20px;
+        }
+
+        .role-selection select {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .scene-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .coordinator-stats {
+            background: rgba(255, 215, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+
+        .coordinator-stats h4 {
+            color: #f1c40f;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        .stat-bar {
+            width: 60px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .stat-fill {
+            height: 100%;
+            background: #f1c40f;
+            transition: width 0.3s;
+        }
+
+        .users-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .user-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-role {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .typing-indicator {
+            color: #f39c12;
+            font-size: 12px;
+        }
+
+        .main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #34495e;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .room-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #2ecc71;
+        }
+
+        .status-indicator.paused {
+            background: #e74c3c;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #ecf0f1;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 85%;
+            word-wrap: break-word;
+            position: relative;
+        }
+
+        .message.user {
+            background: #3498db;
+            color: white;
+            margin-left: auto;
+        }
+
+        .message.agent {
+            background: #9b59b6;
+            color: white;
+            border-left: 4px solid #8e44ad;
+        }
+
+        .message.agent.narrator {
+            background: #e67e22;
+            border-left-color: #d35400;
+        }
+
+        .message.agent.courtesan {
+            background: #e91e63;
+            border-left-color: #c2185b;
+        }
+
+        .message.agent.madam {
+            background: #9c27b0;
+            border-left-color: #7b1fa2;
+        }
+
+        .message.agent.follower {
+            background: #607d8b;
+            border-left-color: #455a64;
+        }
+
+        .message.system {
+            background: #95a5a6;
+            color: white;
+            text-align: center;
+            margin: 10px auto;
+            max-width: 60%;
+            font-size: 14px;
+        }
+
+        .message.human {
+            background: #e67e22;
+            color: white;
+        }
+
+        .message-header {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .agent-priority {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        .priority-5 { background: rgba(231, 76, 60, 0.3); }
+        .priority-4 { background: rgba(230, 126, 34, 0.3); }
+        .priority-3 { background: rgba(241, 196, 15, 0.3); }
+        .priority-2 { background: rgba(46, 204, 113, 0.3); }
+        .priority-1 { background: rgba(149, 165, 166, 0.3); }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 8px;
+        }
+
+        .quality-scores {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 6px;
+            font-size: 11px;
+        }
+
+        .quality-scores.hidden {
+            display: none;
+        }
+
+        .score-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
+        }
+
+        .score-bar {
+            width: 50px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .score-fill {
+            height: 100%;
+            background: #ffffff;
+            transition: width 0.3s;
+        }
+
+        .input-area {
+            background: white;
+            padding: 15px 20px;
+            border-top: 1px solid #bdc3c7;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #ecf0f1;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .message-input:focus {
+            border-color: #3498db;
+        }
+
+        .send-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .send-btn:hover {
+            background: #2980b9;
+        }
+
+        .send-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .toggle-scores-btn {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }
+
+        .toggle-scores-btn:hover {
+            background: #7f8c8d;
+        }
+
+        .typing-status {
+            font-size: 12px;
+            color: #7f8c8d;
+            min-height: 16px;
+            padding: 0 15px;
+        }
+
+        .join-form {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .join-form-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 450px;
+            text-align: center;
+        }
+
+        .join-form input, .join-form select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 2px solid #ecf0f1;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .join-form button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        .join-form button:hover {
+            background: #2980b9;
+        }
+
+        .card-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .card-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .card-description {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .scene-values {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .scene-value {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        .pause-indicator {
+            background: #e74c3c;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            animation: pulse 1s infinite;
+        }
+
+        .coordination-notice {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
+            color: white;
+            padding: 10px 15px;
+            margin: 10px 20px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 13px;
+            border-left: 4px solid #d35400;
+        }
+
+        .coordination-notice::before {
+            content: "🤖 ";
+            font-size: 16px;
+        }
+
+        .debug-panel {
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            max-height: 100px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .debug-toggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        .card-btn {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            margin: 5px 0;
+            width: 100%;
+            transition: all 0.3s;
+        }
+
+        .card-btn:hover {
+            background: linear-gradient(45deg, #c0392b, #a93226);
+            transform: translateY(-1px);
+        }
+
+        .active-card {
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px solid rgba(231, 76, 60, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin: 8px 0;
+            font-size: 11px;
+        }
+
+        .active-card.can-use {
+            background: rgba(46, 204, 113, 0.2);
+            border-color: rgba(46, 204, 113, 0.5);
+            animation: cardGlow 2s infinite;
+        }
+
+        @keyframes cardGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(46, 204, 113, 0.3); }
+            50% { box-shadow: 0 0 15px rgba(46, 204, 113, 0.7); }
+        }
+
+        .card-title {
+            font-weight: bold;
+            color: #e74c3c;
+            margin-bottom: 4px;
+        }
+
+        .card-description {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 10px;
+            line-height: 1.3;
+        }
+
+        .card-trigger {
+            font-size: 10px;
+            color: #f39c12;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .card-use-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 10px;
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        .card-use-btn:hover {
+            background: #219a52;
+        }
+
+        .card-use-btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .card-selector-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .card-selector-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .card-option {
+            border: 2px solid #ecf0f1;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .card-option:hover {
+            border-color: #3498db;
+            background: #f8f9fa;
+        }
+
+        .card-option.selected {
+            border-color: #e74c3c;
+            background: #fdf2f2;
+        }
+
+        .card-option-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .card-option-description {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+
+        .card-option-trigger {
+            font-size: 12px;
+            color: #e67e22;
+            background: #fef9e7;
+            padding: 5px 10px;
+            border-radius: 15px;
+            display: inline-block;
+        }
+
+        /* 新增样式：随从选择模式 */
+        .input-mode {
+            width: 100%;
+        }
+
+        .follower-choices {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .choice-button {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 15px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .choice-button:hover {
+            background: linear-gradient(135deg, #2980b9, #1f4e79);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .choice-button.risk-1, .choice-button.risk-2 {
+            background: linear-gradient(135deg, #27ae60, #1e8449);
+        }
+
+        .choice-button.risk-3 {
+            background: linear-gradient(135deg, #f39c12, #d68910);
+        }
+
+        .choice-button.risk-4, .choice-button.risk-5 {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        .choice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .choice-title {
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .choice-risk {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .choice-content {
+            font-size: 14px;
+            line-height: 1.4;
+            margin-bottom: 8px;
+        }
+
+        .choice-expected {
+            font-size: 12px;
+            opacity: 0.9;
+            font-style: italic;
+        }
+
+        .custom-input-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding-top: 15px;
+            border-top: 1px solid #ecf0f1;
+        }
+
+        .choice-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+
+        .round-info {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .warning-text {
+            color: #e67e22;
+        }
+
+        .game-ended {
+            background: #2c3e50;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px;
+        }
+
+        .final-score {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .final-score.success {
+            color: #2ecc71;
+        }
+
+        .final-score.failure {
+            color: #e74c3c;
+        }
+
+        .final-score.neutral {
+            color: #f39c12;
+        }
+
+        .evaluation-result {
+            background: rgba(52, 152, 219, 0.1);
+            border-left: 4px solid #3498db;
+            padding: 10px 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+
+        .evaluation-scores {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .score-item {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 11px;
+        }
+
+        .follower-disabled-notice {
+            background: #e67e22;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 10px 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <button class="debug-toggle" onclick="toggleDebug()">调试</button>
+    
+    <div class="chat-container">
+        <div class="sidebar">
+            <div class="user-info">
+                <h3 id="username-display">未连接</h3>
+                <div class="role-selection">
+                    <select id="role-select" disabled>
+                        <option value="human_follower">人类随从</option>
+                        <option value="human_courtesan">人类妓女</option>
+                        <option value="human_madam">人类老鸨</option>
+                        <option value="spectator">旁观者</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="scene-info">
+                <h4>场景信息</h4>
+                <div id="scene-name">妓院</div>
+                <div class="scene-values" id="scene-values">
+                    <!-- 场景数值将在这里显示 -->
+                </div>
+            </div>
+
+            <div class="coordinator-stats">
+                <h4>🧠 智能体协调状态</h4>
+                <div class="stat-item">
+                    <span>响应质量:</span>
+                    <div class="stat-bar">
+                        <div class="stat-fill" id="quality-stat" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <span>上下文连贯性:</span>
+                    <div class="stat-bar">
+                        <div class="stat-fill" id="context-stat" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <span>故事推进度:</span>
+                    <div class="stat-bar">
+                        <div class="stat-fill" id="story-stat" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div id="coordination-info" style="font-size: 11px; margin-top: 8px; opacity: 0.8;">
+                    等待智能体响应...
+                </div>
+            </div>
+
+            <div class="card-info" id="card-info">
+                <h4>🎴 卡片系统</h4>
+                <button id="show-cards-btn" class="card-btn" onclick="showCardSelector()">选择卡片</button>
+                <div id="active-cards-list">
+                    <!-- 激活的卡片将在这里显示 -->
+                </div>
+            </div>
+
+            <div class="users-list">
+                <h4>在线用户</h4>
+                <div id="users-container">
+                    <!-- 用户列表将在这里显示 -->
+                </div>
+            </div>
+        </div>
+
+        <div class="main-area">
+            <div class="chat-header">
+                <div>
+                    <h2 id="room-title">苏丹的游戏 - 智能体协调版</h2>
+                    <div id="room-id-display"></div>
+                </div>
+                <div class="room-status">
+                    <div class="status-indicator" id="status-indicator"></div>
+                    <span id="status-text">连接中...</span>
+                    <div id="pause-indicator" class="pause-indicator" style="display: none;">
+                        正在输入...
+                    </div>
+                </div>
+            </div>
+
+            <div class="coordination-notice" id="coordination-notice">
+                智能体协调系统已激活 - 将根据您的消息类型智能选择最合适的AI角色响应
+            </div>
+
+            <div class="debug-panel" id="debug-panel"></div>
+
+            <div class="messages-area" id="messages-area">
+                <!-- 消息将在这里显示 -->
+            </div>
+
+            <div class="typing-status" id="typing-status"></div>
+
+            <div class="input-area" id="input-area">
+                <!-- 普通聊天输入 -->
+                <div id="normal-input" class="input-mode">
+                    <input type="text" id="message-input" class="message-input" placeholder="输入你的消息，AI会智能分析并选择合适的角色响应..." disabled>
+                    <button id="toggle-scores-btn" class="toggle-scores-btn" onclick="toggleQualityScores()">显示评分</button>
+                    <button id="send-btn" class="send-btn" disabled>发送</button>
+                </div>
+                
+                <!-- 随从选择模式 -->
+                <div id="follower-choice-mode" class="input-mode" style="display: none;">
+                    <div class="follower-choices" id="follower-choices">
+                        <!-- 选择按钮将在这里生成 -->
+                    </div>
+                    <div class="custom-input-section">
+                        <input type="text" id="custom-input" class="message-input" placeholder="或者输入你的自定义行动..." maxlength="200">
+                        <button id="send-custom-btn" class="send-btn">发送自定义</button>
+                    </div>
+                    <div class="choice-info">
+                        <span class="round-info" id="round-info">轮次: 1/5</span>
+                        <span class="warning-text">⚠️ 选择将影响场景数值和游戏结果</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加入房间表单 -->
+    <div class="join-form" id="join-form">
+        <div class="join-form-content">
+            <h2>🎭 加入智能体协调游戏</h2>
+            <p style="margin-bottom: 20px; color: #7f8c8d;">体验改进后的多智能体协调系统</p>
+            <input type="text" id="username-input" placeholder="输入你的用户名" maxlength="20">
+            <input type="text" id="room-input" placeholder="输入房间ID (留空使用 'improved_test')" maxlength="30">
+            <select id="scene-select">
+                <option value="brothel">妓院场景</option>
+                <option value="market">市场场景</option>
+                <option value="palace">宫殿场景</option>
+            </select>
+            <select id="join-role-select">
+                <option value="human_follower">🗡️ 人类随从 - 探索和观察</option>
+                <option value="human_courtesan">💃 人类妓女 - 社交和魅惑</option>
+                <option value="human_madam">👩‍💼 人类老鸨 - 商业和管理</option>
+                <option value="spectator">👁️ 旁观者 - 观看故事发展</option>
+            </select>
+            <button onclick="joinRoom()">加入游戏</button>
+            <div style="margin-top: 15px; font-size: 12px; color: #95a5a6;">
+                💡 提示：智能体会根据你的消息类型自动选择最合适的AI角色响应
+            </div>
+        </div>
+    </div>
+
+    <!-- 卡片选择模态框 -->
+    <div class="card-selector-modal" id="card-selector-modal">
+        <div class="card-selector-content">
+            <h2>🎴 选择卡片</h2>
+            <p style="margin-bottom: 20px; color: #7f8c8d;">选择一张卡片开始你的游戏目标</p>
+            <div id="card-options">
+                <!-- 卡片选项将在这里显示 -->
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="activateSelectedCard()" id="activate-card-btn" style="background: #e74c3c; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer; margin-right: 10px;" disabled>激活卡片</button>
+                <button onclick="hideCardSelector()" style="background: #95a5a6; color: white; border: none; padding: 12px 30px; border-radius: 8px; cursor: pointer;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let isConnected = false;
+        let currentUsername = '';
+        let currentRole = '';
+        let roomId = '';
+        let showQualityScores = false;
+        let debugMode = false;
+        let coordinationStats = {
+            quality: 0,
+            context: 0,
+            story: 0,
+            count: 0
+        };
+        let availableCards = [];
+        let selectedCardId = null;
+        
+        // 新增游戏状态
+        let gamePhase = 'free_chat';  // 'free_chat', 'follower_choice', 'game_ended'
+        let followerRounds = 0;
+        let maxFollowerRounds = 5;
+        let pendingChoices = [];
+        let isFollowerRole = false;
+
+        function toggleDebug() {
+            debugMode = !debugMode;
+            const panel = document.getElementById('debug-panel');
+            panel.style.display = debugMode ? 'block' : 'none';
+        }
+
+        function debugLog(message) {
+            if (debugMode) {
+                const panel = document.getElementById('debug-panel');
+                const timestamp = new Date().toLocaleTimeString();
+                panel.innerHTML += `[${timestamp}] ${message}\n`;
+                panel.scrollTop = panel.scrollHeight;
+            }
+        }
+
+        function toggleQualityScores() {
+            showQualityScores = !showQualityScores;
+            const btn = document.getElementById('toggle-scores-btn');
+            btn.textContent = showQualityScores ? '隐藏评分' : '显示评分';
+            
+            const scores = document.querySelectorAll('.quality-scores');
+            scores.forEach(score => {
+                if (showQualityScores) {
+                    score.classList.remove('hidden');
+                } else {
+                    score.classList.add('hidden');
+                }
+            });
+        }
+
+        function updateCoordinationStats(scores) {
+            if (!scores) return;
+            
+            coordinationStats.count++;
+            coordinationStats.quality = (coordinationStats.quality + (scores.context_relevance || 0)) / 2;
+            coordinationStats.context = (coordinationStats.context + (scores.uniqueness_score || 0)) / 2;
+            coordinationStats.story = (coordinationStats.story + (scores.story_progress_value || 0)) / 2;
+            
+            // 更新UI
+            document.getElementById('quality-stat').style.width = (coordinationStats.quality * 100) + '%';
+            document.getElementById('context-stat').style.width = (coordinationStats.context * 100) + '%';
+            document.getElementById('story-stat').style.width = (coordinationStats.story * 100) + '%';
+            
+            const info = document.getElementById('coordination-info');
+            info.textContent = `已协调 ${coordinationStats.count} 次响应`;
+            
+            debugLog(`Stats updated: Q=${coordinationStats.quality.toFixed(2)}, C=${coordinationStats.context.toFixed(2)}, S=${coordinationStats.story.toFixed(2)}`);
+        }
+
+        function joinRoom() {
+            const username = document.getElementById('username-input').value.trim();
+            const room = document.getElementById('room-input').value.trim() || 'improved_test';
+            const scene = document.getElementById('scene-select').value;
+            const role = document.getElementById('join-role-select').value;
+
+            if (!username) {
+                alert('请输入用户名');
+                return;
+            }
+
+            currentUsername = username;
+            currentRole = role;
+            roomId = room;
+
+            connectWebSocket(room, username, role, scene);
+        }
+
+        function connectWebSocket(room, username, role, scene) {
+            const wsUrl = `ws://localhost:8000/ws/${room}`;
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function(event) {
+                    console.log('WebSocket连接已建立');
+                    debugLog('WebSocket连接已建立');
+                    
+                    // 发送加入请求
+                    const joinMessage = {
+                        type: 'join',
+                        username: username,
+                        role: role,
+                        scene_name: scene
+                    };
+                    
+                    ws.send(JSON.stringify(joinMessage));
+                    debugLog(`发送加入请求: ${JSON.stringify(joinMessage)}`);
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        debugLog(`收到消息: ${data.type}`);
+                        handleMessage(data);
+                    } catch (error) {
+                        console.error('解析消息失败:', error);
+                        debugLog(`解析消息失败: ${error.message}`);
+                    }
+                };
+
+                ws.onclose = function(event) {
+                    console.log('WebSocket连接已关闭');
+                    debugLog('WebSocket连接已关闭');
+                    isConnected = false;
+                    updateConnectionStatus('连接已断开', false);
+                };
+
+                ws.onerror = function(error) {
+                    console.error('WebSocket错误:', error);
+                    debugLog(`WebSocket错误: ${error.message}`);
+                    alert('连接失败，请检查服务器是否运行');
+                };
+
+            } catch (error) {
+                console.error('创建WebSocket连接失败:', error);
+                debugLog(`创建WebSocket连接失败: ${error.message}`);
+                alert('无法连接到服务器');
+            }
+        }
+
+        function handleMessage(data) {
+            // 首先检查是否有错误消息
+            if (data.error) {
+                handleError(data.error);
+                return;
+            }
+            
+            switch (data.type) {
+                case 'join_success':
+                    handleJoinSuccess(data);
+                    break;
+                case 'room_state':
+                    handleRoomState(data);
+                    break;
+                case 'chat_message':
+                    addMessage(data.username, data.content, 'user', data.role);
+                    break;
+                case 'agent_message':
+                    addAgentMessage(data);
+                    break;
+                case 'system_message':
+                    addMessage('系统', data.content, 'system');
+                    break;
+                case 'user_typing':
+                    showTyping(data.username, true);
+                    break;
+                case 'user_stop_typing':
+                    showTyping(data.username, false);
+                    break;
+                case 'scene_update':
+                    handleSceneUpdate(data);
+                    break;
+                case 'follower_choices':
+                    handleFollowerChoices(data);
+                    break;
+                case 'game_phase_change':
+                    handleGamePhaseChange(data);
+                    break;
+                case 'evaluation_result':
+                    handleEvaluationResult(data);
+                    break;
+                case 'game_ended':
+                    handleGameEnded(data);
+                    break;
+                default:
+                    console.log('未知消息类型:', data.type);
+                    debugLog(`未知消息类型: ${data.type}`);
+            }
+        }
+
+        function handleJoinSuccess(data) {
+            isConnected = true;
+            updateConnectionStatus('已连接', true);
+            
+            // 隐藏加入表单
+            document.getElementById('join-form').style.display = 'none';
+            
+            // 更新UI
+            document.getElementById('username-display').textContent = currentUsername;
+            document.getElementById('role-select').value = currentRole;
+            document.getElementById('room-id-display').textContent = `房间: ${roomId}`;
+            
+            // 检查是否是随从角色
+            isFollowerRole = currentRole === 'human_follower';
+            
+            // 根据角色类型设置输入
+            if (isFollowerRole) {
+                // 随从角色开始时禁用输入
+                updateInputMode('disabled');
+                addMessage('系统', '🎯 作为随从，你的行动将通过选择来决定。等待旁白发起行动选择...', 'system');
+            } else {
+                // 其他角色启用正常输入
+                updateInputMode('normal');
+                addMessage('系统', `欢迎 ${currentUsername}！智能体协调系统已激活。`, 'system');
+            }
+            
+            debugLog(`加入成功: ${currentUsername} as ${currentRole} in ${roomId}`);
+        }
+
+        function handleError(error) {
+            console.error('服务器错误:', error);
+            debugLog(`服务器错误: ${error}`);
+            
+            // 显示错误消息给用户
+            alert(`错误: ${error}`);
+            
+            // 如果是加入房间失败，重新显示加入表单
+            if (error.includes('加入房间失败') || error.includes('角色') || error.includes('占用')) {
+                document.getElementById('join-form').style.display = 'block';
+                isConnected = false;
+                updateConnectionStatus('连接失败', false);
+            }
+        }
+
+        function handleRoomState(data) {
+            updateUsersList(data.users);
+            updateSceneInfo(data.scene_name, data.scene_values);
+            
+            // 更新激活的卡片
+            if (data.active_cards) {
+                updateActiveCards(data.active_cards);
+            }
+            
+            if (data.is_paused) {
+                document.getElementById('pause-indicator').style.display = 'block';
+                document.getElementById('status-indicator').classList.add('paused');
+            } else {
+                document.getElementById('pause-indicator').style.display = 'none';
+                document.getElementById('status-indicator').classList.remove('paused');
+            }
+        }
+
+        function addAgentMessage(data) {
+            const agentType = data.agent_type || 'unknown';
+            const agentName = data.agent_name || '未知智能体';
+            const content = data.content || '';
+            const priority = data.priority || 0;
+            const qualityScores = data.quality_scores || {};
+            
+            // 添加消息到界面
+            addMessage(agentName, content, 'agent', null, {
+                agentType: agentType,
+                priority: priority,
+                qualityScores: qualityScores
+            });
+            
+            // 更新协调统计
+            updateCoordinationStats(qualityScores);
+            
+            debugLog(`智能体响应: ${agentType}(优先级${priority}) - ${content.substring(0, 50)}...`);
+        }
+
+        function addMessage(username, content, type, role = null, agentData = null) {
+            const messagesArea = document.getElementById('messages-area');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            if (agentData) {
+                messageDiv.classList.add(agentData.agentType);
+            }
+            
+            let headerContent = '';
+            if (type === 'agent' && agentData) {
+                const priorityText = ['', '低', '中', '高', '高', '关键'][agentData.priority] || '未知';
+                headerContent = `
+                    <div class="message-header">
+                        <span>${username} (${agentData.agentType})</span>
+                        <span class="agent-priority priority-${agentData.priority}">优先级: ${priorityText}</span>
+                    </div>
+                `;
+            } else if (type === 'user' && role) {
+                const roleNames = {
+                    'human_follower': '人类随从',
+                    'human_courtesan': '人类妓女',
+                    'human_madam': '人类老鸨',
+                    'spectator': '旁观者'
+                };
+                headerContent = `<div class="message-header">${username} (${roleNames[role] || role})</div>`;
+            } else if (type !== 'system') {
+                headerContent = `<div class="message-header">${username}</div>`;
+            }
+            
+            let qualityScoresContent = '';
+            if (agentData && agentData.qualityScores) {
+                const scores = agentData.qualityScores;
+                qualityScoresContent = `
+                    <div class="quality-scores ${showQualityScores ? '' : 'hidden'}">
+                        <div class="score-row">
+                            <span>相关性:</span>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: ${(scores.context_relevance || 0) * 100}%"></div>
+                            </div>
+                            <span>${((scores.context_relevance || 0) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="score-row">
+                            <span>独特性:</span>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: ${(scores.uniqueness_score || 0) * 100}%"></div>
+                            </div>
+                            <span>${((scores.uniqueness_score || 0) * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="score-row">
+                            <span>故事价值:</span>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: ${(scores.story_progress_value || 0) * 100}%"></div>
+                            </div>
+                            <span>${((scores.story_progress_value || 0) * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            messageDiv.innerHTML = `
+                ${headerContent}
+                <div class="message-content">${content}</div>
+                ${qualityScoresContent}
+                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+            `;
+            
+            messagesArea.appendChild(messageDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+
+        function updateUsersList(users) {
+            const container = document.getElementById('users-container');
+            container.innerHTML = '';
+            
+            users.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'user-item';
+                
+                const roleNames = {
+                    'human_follower': '随从',
+                    'human_courtesan': '妓女',
+                    'human_madam': '老鸨',
+                    'spectator': '旁观者'
+                };
+                
+                userDiv.innerHTML = `
+                    <div>
+                        <div>${user.username}</div>
+                        <div class="user-role">${roleNames[user.role] || user.role}</div>
+                    </div>
+                    ${user.is_typing ? '<div class="typing-indicator">正在输入...</div>' : ''}
+                `;
+                
+                container.appendChild(userDiv);
+            });
+        }
+
+        function updateSceneInfo(sceneName, sceneValues) {
+            document.getElementById('scene-name').textContent = sceneName;
+            
+            const container = document.getElementById('scene-values');
+            container.innerHTML = '';
+            
+            if (sceneValues) {
+                Object.entries(sceneValues).forEach(([key, value]) => {
+                    const valueDiv = document.createElement('div');
+                    valueDiv.className = 'scene-value';
+                    valueDiv.textContent = `${key}: ${value}`;
+                    container.appendChild(valueDiv);
+                });
+            }
+        }
+
+        function handleSceneUpdate(data) {
+            const sceneValues = data.scene_values;
+            const changes = data.changes;
+            
+            // 更新场景数值显示
+            updateSceneInfo(null, sceneValues);
+            
+            // 更新可用卡片状态
+            if (data.available_cards) {
+                updateActiveCards(data.available_cards);
+            }
+            
+            // 显示数值变化信息
+            if (changes && Object.keys(changes).length > 0) {
+                let changeText = '📊 场景数值变化：';
+                
+                Object.entries(changes).forEach(([key, change]) => {
+                    const delta = change.change;
+                    const deltaSymbol = delta > 0 ? '+' : '';
+                    changeText += ` ${key}(${change.old}→${change.new}, ${deltaSymbol}${delta})`;
+                });
+                
+                // 显示变化消息
+                addMessage('系统', changeText, 'system');
+                
+                debugLog(`场景数值更新: ${JSON.stringify(changes)}`);
+            }
+        }
+
+        function updateActiveCards(cards) {
+            const activeCardsList = document.getElementById('active-cards-list');
+            activeCardsList.innerHTML = '';
+            
+            if (!cards || cards.length === 0) {
+                activeCardsList.innerHTML = '<div style="font-size: 11px; color: rgba(255,255,255,0.6); text-align: center; padding: 10px;">暂无激活的卡片</div>';
+                return;
+            }
+            
+            cards.forEach(card => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = `active-card ${card.can_be_used ? 'can-use' : ''}`;
+                
+                const triggerText = card.trigger_condition ? 
+                    `触发条件: ${Object.entries(card.trigger_condition).map(([k,v]) => `${k}≥${v}`).join(', ')}` : '';
+                
+                cardDiv.innerHTML = `
+                    <div class="card-title">${card.title}</div>
+                    <div class="card-description">${card.description}</div>
+                    ${triggerText ? `<div class="card-trigger">${triggerText}</div>` : ''}
+                    ${card.can_be_used ? 
+                        `<button class="card-use-btn" onclick="useCard('${card.card_id}')">🎯 使用卡片</button>` : 
+                        `<button class="card-use-btn" disabled>条件未满足</button>`
+                    }
+                `;
+                
+                activeCardsList.appendChild(cardDiv);
+            });
+        }
+        
+        async function showCardSelector() {
+            try {
+                const response = await fetch(`http://localhost:8000/rooms/${roomId}/cards`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    availableCards = data.cards;
+                    displayCardOptions(availableCards);
+                    document.getElementById('card-selector-modal').style.display = 'flex';
+                } else {
+                    alert('获取卡片列表失败');
+                }
+            } catch (error) {
+                console.error('获取卡片失败:', error);
+                alert('获取卡片失败，请检查服务器连接');
+            }
+        }
+        
+        function displayCardOptions(cards) {
+            const container = document.getElementById('card-options');
+            container.innerHTML = '';
+            
+            cards.forEach(card => {
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'card-option';
+                cardDiv.onclick = () => selectCard(card.card_id);
+                
+                const triggerText = card.trigger_condition ? 
+                    Object.entries(card.trigger_condition).map(([k,v]) => `${k}≥${v}`).join(', ') : '无特殊条件';
+                
+                cardDiv.innerHTML = `
+                    <div class="card-option-title">${card.title}</div>
+                    <div class="card-option-description">${card.description}</div>
+                    <div class="card-option-trigger">触发条件: ${triggerText}</div>
+                `;
+                
+                container.appendChild(cardDiv);
+            });
+        }
+        
+        function selectCard(cardId) {
+            selectedCardId = cardId;
+            
+            // 移除所有选中状态
+            document.querySelectorAll('.card-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // 添加选中状态到当前卡片
+            event.target.closest('.card-option').classList.add('selected');
+            
+            // 启用激活按钮
+            document.getElementById('activate-card-btn').disabled = false;
+        }
+        
+        async function activateSelectedCard() {
+            if (!selectedCardId) return;
+            
+            const selectedCard = availableCards.find(card => card.card_id === selectedCardId);
+            if (!selectedCard) return;
+            
+            try {
+                const response = await fetch(`http://localhost:8000/rooms/${roomId}/card/activate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        card_type: selectedCard.card_type
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    hideCardSelector();
+                    debugLog(`卡片激活成功: ${selectedCard.title}`);
+                } else {
+                    alert('激活卡片失败: ' + data.message);
+                }
+            } catch (error) {
+                console.error('激活卡片失败:', error);
+                alert('激活卡片失败，请检查服务器连接');
+            }
+        }
+        
+        async function useCard(cardId) {
+            try {
+                const response = await fetch(`http://localhost:8000/rooms/${roomId}/card/use`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        card_id: cardId,
+                        action: '使用',
+                        target: ''
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    debugLog(`卡片使用成功: ${JSON.stringify(data.result)}`);
+                } else {
+                    alert('使用卡片失败: ' + data.message);
+                }
+            } catch (error) {
+                console.error('使用卡片失败:', error);
+                alert('使用卡片失败，请检查服务器连接');
+            }
+        }
+        
+        function hideCardSelector() {
+            document.getElementById('card-selector-modal').style.display = 'none';
+            selectedCardId = null;
+            document.getElementById('activate-card-btn').disabled = true;
+        }
+
+        function updateConnectionStatus(status, connected) {
+            document.getElementById('status-text').textContent = status;
+            const indicator = document.getElementById('status-indicator');
+            
+            if (connected) {
+                indicator.style.background = '#2ecc71';
+            } else {
+                indicator.style.background = '#e74c3c';
+            }
+        }
+
+        function showTyping(username, isTyping) {
+            const typingStatus = document.getElementById('typing-status');
+            if (isTyping) {
+                typingStatus.textContent = `${username} 正在输入...`;
+            } else {
+                typingStatus.textContent = '';
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const content = input.value.trim();
+            
+            if (!content || !isConnected) return;
+            
+            const message = {
+                type: 'chat_message',
+                content: content
+            };
+            
+            ws.send(JSON.stringify(message));
+            debugLog(`发送消息: ${content}`);
+            input.value = '';
+        }
+
+        // 事件监听器
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // 输入状态监听
+        let typingTimer = null;
+        document.getElementById('message-input').addEventListener('input', function() {
+            if (!isConnected) return;
+            
+            // 发送开始输入
+            ws.send(JSON.stringify({type: 'typing_start'}));
+            
+            // 清除之前的计时器
+            if (typingTimer) {
+                clearTimeout(typingTimer);
+            }
+            
+            // 设置停止输入的计时器
+            typingTimer = setTimeout(() => {
+                ws.send(JSON.stringify({type: 'typing_stop'}));
+            }, 1000);
+        });
+
+        // 新增函数：游戏机制相关
+        function updateInputMode(mode) {
+            const normalInput = document.getElementById('normal-input');
+            const followerChoiceMode = document.getElementById('follower-choice-mode');
+            const messageInput = document.getElementById('message-input');
+            const sendBtn = document.getElementById('send-btn');
+            
+            switch(mode) {
+                case 'normal':
+                    normalInput.style.display = 'flex';
+                    followerChoiceMode.style.display = 'none';
+                    messageInput.disabled = false;
+                    sendBtn.disabled = false;
+                    break;
+                case 'follower_choice':
+                    normalInput.style.display = 'none';
+                    followerChoiceMode.style.display = 'block';
+                    updateRoundInfo();
+                    break;
+                case 'disabled':
+                    normalInput.style.display = 'flex';
+                    followerChoiceMode.style.display = 'none';
+                    messageInput.disabled = true;
+                    sendBtn.disabled = true;
+                    break;
+                case 'ended':
+                    normalInput.style.display = 'none';
+                    followerChoiceMode.style.display = 'none';
+                    break;
+            }
+        }
+        
+        function updateRoundInfo() {
+            const roundInfo = document.getElementById('round-info');
+            roundInfo.textContent = `轮次: ${followerRounds}/${maxFollowerRounds}`;
+        }
+        
+        function handleFollowerChoices(data) {
+            if (!isFollowerRole) return;
+            
+            gamePhase = 'follower_choice';
+            pendingChoices = data.choices || [];
+            followerRounds = data.current_round || followerRounds;
+            
+            updateInputMode('follower_choice');
+            displayFollowerChoices(pendingChoices);
+            
+            addMessage('系统', '🎯 随从，现在轮到你行动了！请选择一个行动或输入自定义行动：', 'system');
+            debugLog(`收到随从选择: ${pendingChoices.length}个选项`);
+        }
+        
+        function displayFollowerChoices(choices) {
+            const container = document.getElementById('follower-choices');
+            container.innerHTML = '';
+            
+            const riskLabels = {1: '🟢 极低', 2: '🟡 低', 3: '🟠 中', 4: '🔴 高', 5: '⚫ 极高'};
+            
+            choices.forEach((choice, index) => {
+                const button = document.createElement('button');
+                button.className = `choice-button risk-${choice.risk_level}`;
+                button.onclick = () => selectChoice(choice.choice_id);
+                
+                const expectedChanges = Object.entries(choice.expected_values || {})
+                    .filter(([key, value]) => value !== 0)
+                    .map(([key, value]) => `${key}${value > 0 ? '+' : ''}${value}`)
+                    .join(' | ');
+                
+                button.innerHTML = `
+                    <div class="choice-header">
+                        <span class="choice-title">选择 ${index + 1}</span>
+                        <span class="choice-risk">${riskLabels[choice.risk_level] || '❓'}</span>
+                    </div>
+                    <div class="choice-content">${choice.content}</div>
+                    <div class="choice-expected">预期变化: ${expectedChanges || '无'}</div>
+                `;
+                
+                container.appendChild(button);
+            });
+        }
+        
+        function selectChoice(choiceId) {
+            if (!isConnected || gamePhase !== 'follower_choice') return;
+            
+            const message = {
+                type: 'follower_choice',
+                choice_id: choiceId
+            };
+            
+            ws.send(JSON.stringify(message));
+            debugLog(`选择行动: ${choiceId}`);
+            
+            // 禁用所有选择按钮
+            const choiceButtons = document.querySelectorAll('.choice-button');
+            choiceButtons.forEach(btn => btn.disabled = true);
+        }
+        
+        function sendCustomAction() {
+            const customInput = document.getElementById('custom-input');
+            const content = customInput.value.trim();
+            
+            if (!content || !isConnected || gamePhase !== 'follower_choice') return;
+            
+            const message = {
+                type: 'follower_choice',
+                custom_input: content
+            };
+            
+            ws.send(JSON.stringify(message));
+            debugLog(`发送自定义行动: ${content}`);
+            
+            customInput.value = '';
+            customInput.disabled = true;
+            document.getElementById('send-custom-btn').disabled = true;
+        }
+        
+        function handleGamePhaseChange(data) {
+            gamePhase = data.phase;
+            followerRounds = data.follower_rounds || followerRounds;
+            maxFollowerRounds = data.max_follower_rounds || maxFollowerRounds;
+            
+            if (isFollowerRole) {
+                switch(gamePhase) {
+                    case 'free_chat':
+                        updateInputMode('disabled');
+                        addMessage('系统', '💬 进入自由聊天阶段，等待其他角色对话...', 'system');
+                        break;
+                    case 'follower_choice':
+                        // 这个会通过 handleFollowerChoices 处理
+                        break;
+                    case 'game_ended':
+                        updateInputMode('ended');
+                        break;
+                }
+            }
+            
+            debugLog(`游戏阶段变更: ${gamePhase}, 轮次: ${followerRounds}/${maxFollowerRounds}`);
+        }
+        
+        function handleEvaluationResult(data) {
+            const evaluation = data.evaluation;
+            if (!evaluation) return;
+            
+            // 显示评估结果
+            const messagesArea = document.getElementById('messages-area');
+            const evaluationDiv = document.createElement('div');
+            evaluationDiv.className = 'evaluation-result';
+            
+            const scores = evaluation.scores || {};
+            const valueChanges = evaluation.value_changes || {};
+            const explanation = evaluation.explanation || '';
+            
+            const scoresHtml = Object.entries(scores)
+                .map(([key, value]) => `<div class="score-item">${key}: ${value}/10</div>`)
+                .join('');
+            
+            const changesHtml = Object.entries(valueChanges)
+                .filter(([key, value]) => value !== 0)
+                .map(([key, value]) => `${key}${value > 0 ? '+' : ''}${value}`)
+                .join(' | ');
+            
+            evaluationDiv.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 8px;">📊 行动评估结果</div>
+                <div class="evaluation-scores">${scoresHtml}</div>
+                <div style="margin: 8px 0;"><strong>数值变化:</strong> ${changesHtml || '无变化'}</div>
+                <div style="font-style: italic; color: #7f8c8d;">${explanation}</div>
+            `;
+            
+            messagesArea.appendChild(evaluationDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+            
+            debugLog(`评估结果: ${JSON.stringify(evaluation)}`);
+        }
+        
+        function handleGameEnded(data) {
+            gamePhase = 'game_ended';
+            updateInputMode('ended');
+            
+            const result = data.result; // 'success', 'failure', 'neutral'
+            const score = data.final_score || 0;
+            const details = data.details || '';
+            
+            // 显示游戏结束界面
+            const messagesArea = document.getElementById('messages-area');
+            const gameEndDiv = document.createElement('div');
+            gameEndDiv.className = 'game-ended';
+            
+            let resultText = '';
+            let resultClass = '';
+            
+            switch(result) {
+                case 'success':
+                    resultText = '🎉 任务成功！';
+                    resultClass = 'success';
+                    break;
+                case 'failure':
+                    resultText = '💀 任务失败！随从被抓住了...';
+                    resultClass = 'failure';
+                    break;
+                case 'neutral':
+                    resultText = '🤔 任务结束，结果中性';
+                    resultClass = 'neutral';
+                    break;
+            }
+            
+            gameEndDiv.innerHTML = `
+                <h2>${resultText}</h2>
+                <div class="final-score ${resultClass}">最终得分: ${score}</div>
+                <div style="margin-top: 15px; line-height: 1.5;">${details}</div>
+                <div style="margin-top: 20px; font-size: 14px; opacity: 0.8;">
+                    游戏已结束，感谢参与！
+                </div>
+            `;
+            
+            messagesArea.appendChild(gameEndDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+            
+            debugLog(`游戏结束: ${result}, 得分: ${score}`);
+        }
+
+        // 页面加载完成
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('页面加载完成，智能体协调版已就绪');
+            
+            // 添加自定义输入事件监听
+            document.getElementById('send-custom-btn').addEventListener('click', sendCustomAction);
+            document.getElementById('custom-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    sendCustomAction();
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

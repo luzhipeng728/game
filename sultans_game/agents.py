@@ -3,19 +3,19 @@ from langchain_openai import ChatOpenAI
 from typing import Dict, List, Any, Optional
 from .models import GameState, Character, SceneState, Card, CardType
 from .tools import GameToolsManager
-from .config import get_openai_config
+from .config import get_model_config
 
 class SultansGameAgents:
     """苏丹的游戏智能体集合"""
     
     def __init__(self, llm_model: str = None):
-        config = get_openai_config()
-        model_name = llm_model or config["model"]  # 使用传入的模型或配置中的默认模型
+        config = get_model_config(llm_model)  # 使用新的 get_model_config 函数
+        print(config)
         self.llm = ChatOpenAI(
-            model=model_name,
+            model=config["model"],  # 使用原始模型名（不带前缀）
             temperature=0.7,
-            base_url=config["base_url"],
-            api_key=config["api_key"]
+            openai_api_base=config["base_url"],
+            openai_api_key=config["api_key"],
         )
     
     def create_follower_agent(self, character: Character, card: Optional[Card] = None, tools_manager: Optional[GameToolsManager] = None) -> Agent:
