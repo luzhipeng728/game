@@ -18,13 +18,17 @@ try:
     from sultans_game.agents import GameMaster
     from sultans_game.cards import CardGenerator
     from sultans_game.tools import GameToolsManager
-    from sultans_game.config import get_openai_config  # 导入配置
+    from sultans_game.config import get_model_config, get_available_models  # 导入配置
 except ImportError as e:
     st.error(f"导入模块失败: {e}")
     st.stop()
 
-# 初始化API配置
-config = get_openai_config()
+# 初始化会话状态中的模型选择
+if 'selected_model' not in st.session_state:
+    st.session_state.selected_model = "gpt-4.1"  # 默认模型
+
+# 获取当前模型配置
+config = get_model_config(st.session_state.selected_model)
 
 # 初始化会话状态
 def initialize_session_state():
@@ -39,7 +43,7 @@ def initialize_session_state():
         st.session_state.game_state = GameState(current_scene=scene)
     
     if 'game_master' not in st.session_state:
-        st.session_state.game_master = GameMaster(st.session_state.game_state)
+        st.session_state.game_master = GameMaster(st.session_state.game_state, st.session_state.selected_model)
     
     if 'card_generator' not in st.session_state:
         st.session_state.card_generator = CardGenerator()
@@ -127,17 +131,58 @@ def main():
     # 初始化会话状态
     initialize_session_state()
     
+    # 获取当前模型配置
+    config = get_model_config(st.session_state.selected_model)
+    
     # 主标题
     st.title("🏰 苏丹的游戏 - 多智能体卡牌系统")
     st.markdown("*一个基于CrewAI的多智能体对话系统，模拟《苏丹的游戏》中的妓院场景*")
-    st.info(f"🤖 使用模型: {config['model']} | API Base: {config['base_url']}")
+    st.info(f"🤖 使用模型: {config['model_info']['name']} | API Base: {config['base_url']}")
     
     # 侧边栏
     with st.sidebar:
         st.header("⚙️ 游戏设置")
         
+        # 模型选择
+        st.subheader("🤖 模型选择")
+        available_models = get_available_models()
+        
+        # 创建模型选择选项
+        model_options = []
+        model_descriptions = []
+        for model_id, model_info in available_models.items():
+            model_options.append(model_id)
+            model_descriptions.append(f"{model_info['name']} - {model_info['description']}")
+        
+        # 模型选择下拉框
+        selected_model_index = model_options.index(st.session_state.selected_model) if st.session_state.selected_model in model_options else 0
+        
+        new_selected_model = st.selectbox(
+            "选择AI模型",
+            options=model_options,
+            index=selected_model_index,
+            format_func=lambda x: f"{available_models[x]['name']} ({available_models[x]['type']})",
+            help="所有模型都使用 OpenAI 兼容格式，不同模型有不同的特点和性能表现"
+        )
+        
+        # 显示模型详细信息
+        if new_selected_model in available_models:
+            model_info = available_models[new_selected_model]
+            st.info(f"**{model_info['name']}**\n\n{model_info['description']}\n\n类型: {model_info['type']} | 格式: OpenAI 兼容")
+        
+        # 如果模型发生变化，更新配置
+        if new_selected_model != st.session_state.selected_model:
+            st.session_state.selected_model = new_selected_model
+            # 重新获取配置
+            config = get_model_config(st.session_state.selected_model)
+            # 重新初始化 GameMaster（如果存在）
+            if 'game_master' in st.session_state:
+                st.session_state.game_master = GameMaster(st.session_state.game_state, st.session_state.selected_model)
+            st.success(f"✅ 已切换到模型: {model_info['name']}")
+            st.rerun()
+        
         st.success("✅ API已配置完成")
-        st.info(f"当前模型: {config['model']}")
+        st.info(f"当前模型: {config['model_info']['name']}")
         
         st.divider()
         
