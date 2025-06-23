@@ -13,6 +13,10 @@ from ..tools import set_game_state
 class AgentResponseManager:
     """智能体响应管理器"""
     
+    def __init__(self):
+        self.game_manager = None
+        self.message_handler = None
+
     @staticmethod
     def get_role_display_name(role: UserRole) -> str:
         """获取角色显示名称"""
@@ -36,8 +40,7 @@ class AgentResponseManager:
         }
         return agent_names.get(agent_type, agent_type)
     
-    @staticmethod
-    async def coordinate_agent_responses(room: ChatRoom, user_message: str, user: ChatUser):
+    async def coordinate_agent_responses(self, room: ChatRoom, user_message: str, user: ChatUser):
         """协调智能体响应 - 使用新的协调器"""
         if not room.agent_manager or not room.agent_coordinator or room.is_paused:
             return
@@ -91,18 +94,17 @@ class AgentResponseManager:
                 delay = 0.5 + i * 0.8
                 old_values = old_scene_values_coord if i == 0 else None
                 asyncio.create_task(
-                    AgentResponseManager.send_coordinated_response(room, response, delay, old_values)
+                    AgentResponseManager.send_coordinated_response(self, response, delay, old_values)
                 )
                 
         except Exception as e:
             print(f"协调智能体响应时出错: {e}")
     
-    @staticmethod
-    async def send_coordinated_response(room: ChatRoom, response, delay: float, old_scene_values: Optional[Dict] = None):
+    async def send_coordinated_response(self, room: ChatRoom, response, delay: float, old_scene_values: Optional[Dict] = None):
         """发送协调的响应"""
         await asyncio.sleep(delay)
         
-        if (room.room_id not in room.manager.rooms or room.is_paused):
+        if (room.room_id not in self.manager.rooms or room.is_paused):
             return
         
         try:
@@ -152,24 +154,38 @@ class AgentResponseManager:
             
             # 触发后续的自动对话
             if random.random() < 0.8:
-                await AgentResponseManager.schedule_next_agent_response(room)
+                await self.schedule_next_agent_response(room)
             
         except Exception as e:
             print(f"发送协调响应时出错: {e}")
 
-    @staticmethod
-    async def schedule_next_agent_response(room: ChatRoom, exclude_role: Optional[UserRole] = None):
-        """安排下一个智能体回应"""
-        if not room.agent_manager or room.is_paused:
-            return
+    def schedule_next_agent_response(self, room: ChatRoom, last_speaker: Optional[ChatUser] = None):
+        """安排下一个智能体响应"""
+        exclude_role = None
+        if last_speaker and last_speaker.role != UserRole.SPECTATOR:
+            # 找到与玩家角色匹配的智能体类型并排除
+            for agent in room.agent_manager.get_active_agents().values():
+                if agent.character.role == last_speaker.role.value:
+                    exclude_role = agent.get_type()
+                    break
+
+        active_agents_dict = room.agent_manager.get_active_agents()
+        available_agents = list(active_agents_dict.keys())
         
-        available_agents = room.agent_manager.get_active_agent_types(exclude_role=exclude_role)
-        
+        if exclude_role in available_agents:
+            available_agents.remove(exclude_role)
+
         if not available_agents:
+            print("没有可用的智能体进行响应。")
             return
         
-        next_agent = AgentResponseManager._select_next_agent_strategically(room, available_agents, exclude_role)
-        asyncio.create_task(AgentResponseManager.delayed_agent_response(room, next_agent, 0))
+        next_agent = self._select_next_agent_strategically(room, available_agents, exclude_role)
+        
+        # 随机延迟
+        delay = random.uniform(1.5, 3.0) 
+        
+        # Call as instance method
+        asyncio.create_task(self.delayed_agent_response(room, next_agent, delay))
     
     @staticmethod
     def _select_next_agent_strategically(room: ChatRoom, available_agents: List[str], exclude_role: Optional[UserRole] = None) -> str:
@@ -194,7 +210,6 @@ class AgentResponseManager:
         
         return next((agent for agent in priority_order if agent in available_agents), random.choice(available_agents))
     
-    @staticmethod
     async def delayed_agent_response(self, room: ChatRoom, agent_type: str, delay: float):
         """延迟的智能体回应"""
         await asyncio.sleep(delay)

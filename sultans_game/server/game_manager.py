@@ -3,6 +3,7 @@
 import uuid
 import time
 from typing import List, Optional, Dict
+from ..models import Card
 
 from .websocket_models import ChatRoom, ChatUser, UserRole, MessageType
 from .message_broadcaster import MessageBroadcaster
@@ -233,8 +234,8 @@ class GameManager:
         })
     
     @staticmethod
-    async def announce_card_mission(room: ChatRoom, card):
-        """激活卡片后让旁白宣布任务目标"""
+    async def announce_card_mission(room: ChatRoom, card: Card, agent_response_manager):
+        """宣布卡片任务目标并启动对话"""
         if room.mission_announced:
             return
         
@@ -258,14 +259,16 @@ class GameManager:
 现在，让故事开始吧...
 """
         
-        # 旁白宣布任务
         await MessageBroadcaster.broadcast_to_room(room, {
-            "type": MessageType.AGENT_MESSAGE.value,
+            "type": MessageType.SYSTEM_MESSAGE.value,
+            "content": mission_content,
             "agent_type": "narrator",
             "agent_name": "旁白者",
-            "content": mission_content,
             "timestamp": time.time()
         })
+        
+        # 触发初始智能体对话
+        agent_response_manager.schedule_next_agent_response(room)
     
     @staticmethod
     async def check_follower_choice_trigger(room: ChatRoom):

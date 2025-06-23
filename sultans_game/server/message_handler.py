@@ -13,6 +13,8 @@ class MessageHandler:
     
     def __init__(self, room_manager):
         self.room_manager = room_manager
+        self.game_manager = None
+        self.agent_response_manager = None
     
     async def handle_message(self, user: ChatUser, data: Dict):
         """处理用户消息"""
@@ -86,8 +88,9 @@ class MessageHandler:
             await GameManager.end_game_due_to_limit(room)
             return
 
-        if user.role in [UserRole.HUMAN_FOLLOWER, UserRole.HUMAN_COURTESAN, UserRole.HUMAN_MADAM]:
-            await AgentResponseManager.coordinate_agent_responses(room, content, user)
+        # 任何用户发言都可能触发智能体响应
+        if self.agent_response_manager:
+            await self.agent_response_manager.coordinate_agent_responses(room, content, user)
     
     async def handle_pause_request(self, user: ChatUser, room: ChatRoom, data: Dict):
         """处理暂停请求"""
